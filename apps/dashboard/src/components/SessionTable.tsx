@@ -1,6 +1,6 @@
 import type { Machine, Session } from '@mc/protocol';
 import { formatBytes, formatCount, formatDuration, formatPct } from '@mc/shared';
-import { Button, Card } from '@mc/ui';
+import { Button, Card, cn } from '@mc/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { motion } from 'framer-motion';
 import { GitBranch, RotateCw, Square } from 'lucide-react';
@@ -24,6 +24,13 @@ export function SessionTable({
   fillHeight = false,
 }: Props) {
   const navigate = useNavigate();
+
+  // Pin sessions waiting for approval to the top so they're never missed.
+  const ordered = [...sessions].sort((a, b) => {
+    const aw = a.status === 'waiting_approval' ? 0 : 1;
+    const bw = b.status === 'waiting_approval' ? 0 : 1;
+    return aw - bw;
+  });
 
   if (sessions.length === 0) {
     return (
@@ -58,16 +65,21 @@ export function SessionTable({
             </tr>
           </thead>
           <tbody>
-          {sessions.map((s, i) => (
+          {ordered.map((s, i) => {
+            const waiting = s.status === 'waiting_approval';
+            return (
             <motion.tr
               key={s.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: Math.min(i * 0.02, 0.3) }}
               onClick={() => navigate({ to: '/sessions/$sessionId', params: { sessionId: s.id } })}
-              className="cursor-pointer border-b border-white/[0.03] transition-colors hover:bg-white/[0.02]"
+              className={cn(
+                'cursor-pointer border-b border-white/[0.03] transition-colors hover:bg-white/[0.02]',
+                waiting && 'bg-amber-500/[0.06] hover:bg-amber-500/[0.1]',
+              )}
             >
-              <td className="px-4 py-3">
+              <td className={cn('px-4 py-3', waiting && 'border-l-2 border-amber-400')}>
                 <StatusBadge status={s.status} />
               </td>
               <td className="px-4 py-3 font-medium text-zinc-200">{s.repo || '—'}</td>
@@ -123,7 +135,8 @@ export function SessionTable({
                 </div>
               </td>
             </motion.tr>
-          ))}
+            );
+          })}
           </tbody>
         </table>
       </div>

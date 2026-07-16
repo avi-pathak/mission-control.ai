@@ -33,6 +33,9 @@ function ConnectionPill() {
 export function AppLayout() {
   const connect = useLiveStore((s) => s.connect);
   const hydrateFleet = useLiveStore((s) => s.hydrateFleet);
+  const waitingCount = useLiveStore(
+    (s) => Object.values(s.sessions).filter((sess) => sess.status === 'waiting_approval').length,
+  );
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
@@ -44,6 +47,11 @@ export function AppLayout() {
       .catch(() => {});
   }, [connect, hydrateFleet]);
 
+  // Surface pending approvals in the tab title even when backgrounded.
+  useEffect(() => {
+    document.title = waitingCount > 0 ? `(${waitingCount}) Mission Control.ai` : 'Mission Control.ai';
+  }, [waitingCount]);
+
   return (
     <div className="flex h-screen overflow-hidden">
       <aside className="flex w-60 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.015] px-3 py-4">
@@ -54,6 +62,8 @@ export function AppLayout() {
         <nav className="flex flex-1 flex-col gap-1">
           {NAV.map(({ to, label, icon: Icon, exact }) => {
             const active = exact ? pathname === to : pathname.startsWith(to);
+            const showBadge =
+              waitingCount > 0 && (to === '/sessions' || to === '/');
             return (
               <Link
                 key={to}
@@ -67,6 +77,11 @@ export function AppLayout() {
               >
                 <Icon className="h-4 w-4" />
                 {label}
+                {showBadge && (
+                  <span className="ml-auto rounded-full bg-amber-500/20 px-1.5 text-xs font-medium text-amber-300">
+                    {waitingCount}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -60,6 +60,22 @@ export function OverviewPage() {
 
       <NewSessionDialog open={newOpen} onClose={() => setNewOpen(false)} />
 
+      {counts.waiting > 0 && (
+        <button
+          onClick={() => setFilters({ ...filters, status: 'waiting_approval' })}
+          className="flex shrink-0 items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-sm text-amber-300 transition-colors hover:bg-amber-500/15"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+          </span>
+          <span className="font-medium">
+            {counts.waiting} session{counts.waiting === 1 ? '' : 's'} waiting for your approval
+          </span>
+          <span className="ml-auto text-amber-400/70">View →</span>
+        </button>
+      )}
+
       {/* Fixed top section: stats, charts, filters */}
       <div className="grid shrink-0 grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Running" value={counts.running} icon={Play} accent="text-emerald-400" />

@@ -105,6 +105,7 @@ func (p *Provider) Discover(ctx context.Context) ([]protocol.Session, error) {
 		}
 		sess.TmuxSession = tmuxSessionForPID(ctx, int(pr.Pid))
 		sess.Tokens = tokenUsageForCWD(cwd)
+		sess.Status = p.detectStatus(ctx, sess)
 		sessions = append(sessions, sess)
 	}
 	return sessions, nil
