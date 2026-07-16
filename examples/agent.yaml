@@ -1,0 +1,33 @@
+# Mission Control agent configuration.
+# Env overrides: MC_SERVER_URL, MC_API_KEY, MC_AGENT_ID.
+
+# Server WebSocket endpoint (http/https are auto-upgraded to ws/wss).
+serverUrl: "ws://localhost:8080"
+
+# Durable per-machine key. Populated automatically after enrollment; you can
+# also set a shared key here to bypass enrollment.
+apiKey: "dev-key"
+
+# One-time enrollment token. If set (and apiKey is empty), the agent exchanges
+# it for a durable key on first run, then clears it. Usually injected by the
+# `Add Machine` install one-liner via MC_ENROLL_TOKEN.
+enrollToken: ""
+
+# Stable agent id. Leave empty to derive from enrollment or the host machine id.
+agentId: ""
+
+# Optional hostname override (defaults to os.Hostname()).
+hostname: ""
+
+# Enabled providers.
+providers:
+  - "claude-code"
+
+discoverEverySeconds: 5
+metricsEverySeconds: 3
+heartbeatEverySeconds: 10
+
+# Skip TLS verification (self-signed dev certs only).
+insecureSkipVerify: false
+
+logLevel: "info"

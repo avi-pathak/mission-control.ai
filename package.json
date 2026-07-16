@@ -1,0 +1,23 @@
+{
+  "name": "mission-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted dashboard for managing AI coding agent sessions",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter @mc/dashboard dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

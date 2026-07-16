@@ -1,0 +1,14 @@
+# Build the Mission Control agent (CGO-free, cross-compiles cleanly).
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/agent ./apps/agent
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates git tmux
+WORKDIR /app
+COPY --from=build /out/agent /usr/local/bin/mission-control-agent
+# Configuration via env: MC_SERVER_URL, MC_API_KEY or MC_ENROLL_TOKEN, MC_AGENT_ID.
+ENTRYPOINT ["mission-control-agent"]

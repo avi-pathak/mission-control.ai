@@ -1,0 +1,48 @@
+# GoReleaser configuration for Mission Control.
+# Builds the agent for all supported platforms and publishes to GitHub Releases.
+# The server is distributed via Docker (needs CGO for SQLite); the agent has no
+# CGO dependencies and cross-compiles cleanly.
+version: 2
+
+project_name: mission-control.ai
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: agent
+    main: ./apps/agent
+    binary: mission-control-agent
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/avi-pathak/mission-control.ai/internal/agent.Version={{.Version}}
+
+archives:
+  # Publish raw binaries (not tarballs) so install.sh can fetch them directly
+  # under the name mission-control-agent-<os>-<arch>.
+  - id: agent
+    ids: [agent]
+    formats: [binary]
+    name_template: "mission-control-agent-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: avi-pathak
+    name: mission-control.ai
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

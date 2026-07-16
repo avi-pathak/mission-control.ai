@@ -1,0 +1,46 @@
+# Combined image: builds the dashboard SPA and the Go server, then serves both
+# from a single binary (server hosts /api, /ws, and the dashboard).
+
+# --- Dashboard build ---
+FROM node:20-alpine AS web
+RUN corepack enable
+WORKDIR /repo
+COPY pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/dashboard ./apps/dashboard
+RUN pnpm install --frozen-lockfile=false
+RUN pnpm --filter @mc/dashboard build
+
+# --- Server build (+ cross-compiled agent binaries for /download) ---
+FROM golang:1.25-alpine AS build
+RUN apk add --no-cache gcc musl-dev
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# CGO is required for the SQLite fallback driver.
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o /out/server ./apps/server
+# Cross-compile the CGO-free agent for every supported platform so the server
+# can serve them at /download/<name> (self-hosted, no GitHub releases needed).
+RUN set -eu; mkdir -p /out/agents; \
+    for t in "linux amd64" "linux arm64" "darwin amd64" "darwin arm64" "windows amd64"; do \
+      set -- $t; os=$1; arch=$2; name="mission-control-agent-${os}-${arch}"; \
+      [ "$os" = "windows" ] && name="${name}.exe"; \
+      CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "/out/agents/$name" ./apps/agent; \
+    done
+
+# --- Runtime ---
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates git
+WORKDIR /app
+COPY --from=build /out/server /app/server
+COPY --from=build /out/agents /app/agents
+COPY --from=web /repo/apps/dashboard/dist /app/web
+EXPOSE 8080
+VOLUME ["/data"]
+# All configuration via env: DATABASE_URL, JWT_SECRET, ADMIN_EMAIL,
+# ADMIN_PASSWORD, MC_PUBLIC_URL, MC_LISTEN_ADDR, MC_LOG_LEVEL.
+ENV DATABASE_URL=/data/mission-control.db \
+    MC_STATIC_DIR=/app/web \
+    MC_AGENT_BIN_DIR=/app/agents
+ENTRYPOINT ["/app/server"]

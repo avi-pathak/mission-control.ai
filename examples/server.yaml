@@ -1,0 +1,39 @@
+# Mission Control server configuration.
+# Everything can also be set via environment variables (env wins over YAML):
+#   DATABASE_URL     postgres:// DSN, or a SQLite file path (default: mission-control.db)
+#   JWT_SECRET       secret for signing dashboard session tokens (REQUIRED in prod)
+#   ADMIN_EMAIL      bootstrap owner email (created on first run if no users exist)
+#   ADMIN_PASSWORD   bootstrap owner password
+#   MC_LISTEN_ADDR   listen address (default :8080)
+#   MC_PUBLIC_URL    externally reachable base URL, used in enrollment commands
+#   MC_LOG_LEVEL     debug|info|warn|error
+
+listenAddr: ":8080"
+publicUrl: ""
+
+# Postgres DSN for production, e.g.
+#   postgres://user:pass@host:5432/dbname?sslmode=disable
+# or a SQLite file path for local/dev.
+databaseUrl: "mission-control.db"
+
+# Signing secret for dashboard JWTs. MUST be set to a strong random value in
+# production (or via JWT_SECRET).
+jwtSecret: ""
+
+# Bootstrap admin (first run only, when the database has no users).
+adminEmail: ""
+adminPassword: ""
+
+corsOrigins:
+  - "*"
+
+tls:
+  enabled: false
+  certFile: ""
+  keyFile: ""
+
+retention:
+  logHours: 72
+  metricHours: 72
+
+logLevel: "info"

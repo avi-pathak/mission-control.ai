@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mission
+      POSTGRES_PASSWORD: mission
+      POSTGRES_DB: mission_control
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mission -d mission_control"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Single service: the Go server hosts the REST API, WebSocket, AND the
+  # dashboard SPA on one port.
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    environment:
+      MC_LISTEN_ADDR: ":8080"
+      DATABASE_URL: "postgres://mission:mission@postgres:5432/mission_control?sslmode=disable"
+      JWT_SECRET: "change-me-in-production"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "change-me-please"
+      MC_PUBLIC_URL: "http://localhost:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pg-data:

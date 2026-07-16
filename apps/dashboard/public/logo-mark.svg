@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Mission Control">
+  <!-- Orbital ring -->
+  <ellipse cx="32" cy="38" rx="21" ry="8" stroke="currentColor" stroke-width="3.2" fill="none" />
+  <!-- M mark -->
+  <path d="M22 44 V26 L32 37 L42 26 V44"
+        stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <!-- little feet -->
+  <path d="M26 45.5 V48" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+  <path d="M38 45.5 V48" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+</svg>
