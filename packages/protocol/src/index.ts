@@ -91,7 +91,7 @@ export const SessionSchema = z.object({
   cwd: z.string(),
   pid: z.number(),
   currentCommand: z.string(),
-  claudeVersion: z.string(),
+  version: z.string(),
   tmuxSession: z.string().optional(),
   cpuPct: z.number(),
   memBytes: z.number(),

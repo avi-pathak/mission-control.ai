@@ -49,6 +49,13 @@ type LaunchableProvider interface {
 	Launch(ctx context.Context, cwd string) (LaunchSpec, error)
 }
 
+// MachineAware is optionally implemented by providers that need the host's
+// stable machine id injected after the agent resolves it (used to build
+// deterministic session ids).
+type MachineAware interface {
+	SetMachineID(string)
+}
+
 // Factory constructs a provider instance.
 type Factory func() (AgentProvider, error)
 

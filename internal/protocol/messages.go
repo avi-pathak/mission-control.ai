@@ -42,7 +42,7 @@ type Session struct {
 	CWD            string        `json:"cwd"`
 	PID            int           `json:"pid"`
 	CurrentCommand string        `json:"currentCommand"`
-	ClaudeVersion  string        `json:"claudeVersion"`
+	Version        string        `json:"version"`
 	TmuxSession    string        `json:"tmuxSession,omitempty"`
 	CPUPct         float64       `json:"cpuPct"`
 	MemBytes       uint64        `json:"memBytes"`

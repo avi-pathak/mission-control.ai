@@ -20,7 +20,7 @@ describe('protocol codec', () => {
       cwd: '/tmp',
       pid: 123,
       currentCommand: 'claude',
-      claudeVersion: '1.0.0',
+      version: '1.0.0',
       cpuPct: 12.5,
       memBytes: 1024,
       startedAt: 1,

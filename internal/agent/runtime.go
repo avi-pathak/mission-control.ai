@@ -16,7 +16,7 @@ import (
 	"github.com/avi-pathak/mission-control.ai/internal/config"
 	"github.com/avi-pathak/mission-control.ai/internal/protocol"
 	"github.com/avi-pathak/mission-control.ai/internal/provider"
-	"github.com/avi-pathak/mission-control.ai/internal/provider/claude"
+	"github.com/avi-pathak/mission-control.ai/internal/tmux"
 	"go.uber.org/zap"
 )
 
@@ -380,7 +380,7 @@ func (r *Runtime) handleTerminalAttach(env *protocol.Envelope) {
 	}
 	r.log.Info("terminal attach", zap.String("pty", p.PTYID), zap.String("tmux", sess.TmuxSession), zap.Int("cols", p.Cols), zap.Int("rows", p.Rows))
 	r.term.AttachTmux(p.PTYID, p.SessionID, sess.TmuxSession, p.Cols, p.Rows,
-		claude.CaptureLoop, claude.SendKeys, claude.ResizeWindow, claude.TmuxSessionExists)
+		tmux.CaptureLoop, tmux.SendKeys, tmux.ResizeWindow, tmux.SessionExists)
 }
 
 func deriveAgentID() string {

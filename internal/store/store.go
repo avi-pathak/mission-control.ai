@@ -89,7 +89,7 @@ type Session struct {
 	CWD            string
 	PID            int
 	CurrentCommand string
-	ClaudeVersion  string
+	Version        string
 	TmuxSession    string
 	StartedAt      time.Time
 	LastActivityAt time.Time

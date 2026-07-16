@@ -42,7 +42,7 @@ func (s *Store) UpsertSession(orgID string, sess protocol.Session) error {
 		CWD:            sess.CWD,
 		PID:            sess.PID,
 		CurrentCommand: sess.CurrentCommand,
-		ClaudeVersion:  sess.ClaudeVersion,
+		Version:        sess.Version,
 		TmuxSession:    sess.TmuxSession,
 		StartedAt:      msToTime(sess.StartedAt),
 		LastActivityAt: msToTime(sess.LastActivityAt),

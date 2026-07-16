@@ -1,6 +1,11 @@
-package claude
+// Package tmux provides provider-agnostic helpers for observing and driving
+// tmux sessions: pane discovery, live capture/mirroring, keystroke translation
+// (send-keys), and window sizing. It depends only on the standard library, so
+// any provider (Claude, Codex, …) can use it without import cycles.
+package tmux
 
 import (
+	"bufio"
 	"context"
 	"os/exec"
 	"strconv"
@@ -176,7 +181,8 @@ func renderFrame(buf []byte, cx, cy int) []byte {
 	return out
 }
 
-// splitLines splits on '\n' without allocating substrings' escapes wrong.
+// splitLines splits on '\n' preserving raw bytes (no string conversion that
+// could corrupt multi-byte UTF-8).
 func splitLines(b []byte) [][]byte {
 	var lines [][]byte
 	start := 0
@@ -216,12 +222,74 @@ func ResizeWindow(ctx context.Context, target string, cols, rows int) {
 		"-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows)).Run()
 }
 
-// TmuxSessionExists reports whether a tmux session/target is live.
-func TmuxSessionExists(ctx context.Context, target string) bool {
+// SessionExists reports whether a tmux session/target is live.
+func SessionExists(ctx context.Context, target string) bool {
 	// target may be "session" or "session:win.pane"; has-session wants the name.
 	name := target
 	if i := strings.IndexByte(name, ':'); i >= 0 {
 		name = name[:i]
 	}
 	return exec.CommandContext(ctx, "tmux", "has-session", "-t", name).Run() == nil
+}
+
+// SessionForPID returns the tmux session name whose active pane runs the given
+// PID, or "" if tmux is unavailable or no match is found.
+func SessionForPID(ctx context.Context, pid int) string {
+	out, err := exec.CommandContext(ctx, "tmux", "list-panes", "-a",
+		"-F", "#{session_name}\x1f#{pane_pid}").Output()
+	if err != nil {
+		return ""
+	}
+	target := strconv.Itoa(pid)
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Split(line, "\x1f")
+		if len(f) == 2 && f[1] == target {
+			return f[0]
+		}
+	}
+	return ""
+}
+
+// TailPane polls `tmux capture-pane` and emits the newest trailing line whenever
+// it changes, as plain strings. Read-only; suitable as a passive log source for
+// providers that run inside tmux. Returns a channel closed when ctx is done.
+func TailPane(ctx context.Context, target string) <-chan string {
+	ch := make(chan string, 64)
+	go func() {
+		defer close(ch)
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		var lastLine string
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				out, err := exec.CommandContext(ctx, "tmux", "capture-pane",
+					"-t", target, "-p", "-e").Output()
+				if err != nil {
+					continue
+				}
+				sc := bufio.NewScanner(strings.NewReader(string(out)))
+				var lines []string
+				for sc.Scan() {
+					lines = append(lines, sc.Text())
+				}
+				if len(lines) == 0 {
+					continue
+				}
+				last := lines[len(lines)-1]
+				if last == lastLine {
+					continue
+				}
+				lastLine = last
+				select {
+				case ch <- last:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return ch
 }

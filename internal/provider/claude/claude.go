@@ -15,6 +15,7 @@ import (
 	"github.com/avi-pathak/mission-control.ai/internal/gitinfo"
 	"github.com/avi-pathak/mission-control.ai/internal/protocol"
 	"github.com/avi-pathak/mission-control.ai/internal/provider"
+	"github.com/avi-pathak/mission-control.ai/internal/tmux"
 )
 
 // Provider discovers Claude Code CLI sessions running on the host.
@@ -94,7 +95,7 @@ func (p *Provider) Discover(ctx context.Context) ([]protocol.Session, error) {
 			CWD:            cwd,
 			PID:            int(pr.Pid),
 			CurrentCommand: truncate(cmdline, 512),
-			ClaudeVersion:  p.claudeVersion(ctx),
+			Version:        p.claudeVersion(ctx),
 			StartedAt:      createMs,
 			LastActivityAt: time.Now().UnixMilli(),
 		}
@@ -103,7 +104,7 @@ func (p *Provider) Discover(ctx context.Context) ([]protocol.Session, error) {
 			sess.Repo = git.Repo
 			sess.Branch = git.Branch
 		}
-		sess.TmuxSession = tmuxSessionForPID(ctx, int(pr.Pid))
+		sess.TmuxSession = tmux.SessionForPID(ctx, int(pr.Pid))
 		sess.Tokens = tokenUsageForCWD(cwd)
 		sess.Status = p.detectStatus(ctx, sess)
 		sessions = append(sessions, sess)
@@ -139,9 +140,31 @@ func (p *Provider) Logs(ctx context.Context, s protocol.Session) (<-chan provide
 		return tailTranscript(ctx, s, path), nil
 	}
 	if s.TmuxSession != "" {
-		return tailTmuxPane(ctx, s), nil
+		return tailTmuxPaneAsLogs(ctx, s), nil
 	}
 	return nil, nil
+}
+
+// tailTmuxPaneAsLogs adapts the shared tmux pane tail (plain strings) into the
+// provider.LogLine channel the runtime expects.
+func tailTmuxPaneAsLogs(ctx context.Context, s protocol.Session) <-chan provider.LogLine {
+	out := make(chan provider.LogLine, 64)
+	go func() {
+		defer close(out)
+		for line := range tmux.TailPane(ctx, s.TmuxSession) {
+			select {
+			case out <- provider.LogLine{
+				SessionID: s.ID,
+				Stream:    protocol.StreamStdout,
+				Line:      line,
+				TS:        time.Now().UnixMilli(),
+			}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
 }
 
 // Control implements AgentProvider.

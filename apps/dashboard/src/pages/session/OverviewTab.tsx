@@ -31,7 +31,7 @@ export function OverviewTab({ session }: { session: Session }) {
           <Row label="Hostname" value={machine?.hostname ?? session.machineId} />
           <Row label="OS" value={machine ? `${machine.os}/${machine.arch}` : '—'} />
           <Row label="Cores" value={machine ? String(machine.cpuCores) : '—'} />
-          <Row label="Claude" value={session.claudeVersion || '—'} />
+          <Row label="Version" value={session.version || '—'} />
           {session.tmuxSession && <Row label="tmux" value={session.tmuxSession} />}
         </CardContent>
       </Card>

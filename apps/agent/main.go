@@ -82,9 +82,10 @@ func runDaemon() {
 	}
 
 	rt := agent.New(cfg, log, providers)
+	// Inject the resolved machine id into providers that need it.
 	for _, p := range providers {
-		if cp, ok := p.(*claude.Provider); ok {
-			cp.SetMachineID(rt.AgentID())
+		if ma, ok := p.(provider.MachineAware); ok {
+			ma.SetMachineID(rt.AgentID())
 		}
 	}
 
