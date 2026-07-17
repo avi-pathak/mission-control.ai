@@ -8,12 +8,13 @@ interface Props {
   onClose: () => void;
 }
 
-/** Start a new interactive Claude session on a chosen online machine. */
+/** Start a new interactive session (Claude or Codex) on a chosen machine. */
 export function NewSessionDialog({ open, onClose }: Props) {
   const machines = useMachines().filter((m) => m.online);
   const navigate = useNavigate();
 
   const [machineId, setMachineId] = useState('');
+  const [providerId, setProviderId] = useState('claude-code');
   const [cwd, setCwd] = useState('');
   const [initialText, setInitialText] = useState('');
 
@@ -28,7 +29,7 @@ export function NewSessionDialog({ open, onClose }: Props) {
     navigate({
       to: '/terminal/$ptyId',
       params: { ptyId },
-      search: { machineId: target, cwd: cwd || '.', initialText },
+      search: { machineId: target, provider: providerId, cwd: cwd || '.', initialText },
     });
     onClose();
   };
@@ -54,6 +55,17 @@ export function NewSessionDialog({ open, onClose }: Props) {
                 {m.hostname}
               </option>
             ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-zinc-500">Agent</label>
+          <select
+            className={selectClass}
+            value={providerId}
+            onChange={(e) => setProviderId(e.target.value)}
+          >
+            <option value="claude-code">Claude Code</option>
+            <option value="codex">OpenAI Codex</option>
           </select>
         </div>
         <div>

@@ -19,6 +19,7 @@ import (
 	"github.com/avi-pathak/mission-control.ai/internal/logging"
 	"github.com/avi-pathak/mission-control.ai/internal/provider"
 	"github.com/avi-pathak/mission-control.ai/internal/provider/claude"
+	"github.com/avi-pathak/mission-control.ai/internal/provider/codex"
 	"go.uber.org/zap"
 )
 
@@ -66,6 +67,7 @@ func runDaemon() {
 	defer func() { _ = log.Sync() }()
 
 	claude.Register()
+	codex.Register()
 
 	hostname := cfg.HostnameOverride
 	if hostname == "" {

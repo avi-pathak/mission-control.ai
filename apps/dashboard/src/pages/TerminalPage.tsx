@@ -15,14 +15,15 @@ export function TerminalPage() {
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Interactive session</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Claude running in <span className="font-mono">{search.cwd}</span>
+          {search.provider === 'codex' ? 'Codex' : 'Claude'} running in{' '}
+          <span className="font-mono">{search.cwd}</span>
         </p>
       </header>
       <InteractiveTerminal
         ptyId={ptyId}
         open={{
           machineId: search.machineId,
-          provider: 'claude-code',
+          provider: search.provider,
           cwd: search.cwd,
           initialText: search.initialText || undefined,
         }}

@@ -55,6 +55,7 @@ const settingsRoute = createRoute({
 
 export interface TerminalSearch {
   machineId: string;
+  provider: string;
   cwd: string;
   initialText?: string | undefined;
 }
@@ -65,6 +66,7 @@ const terminalRoute = createRoute({
   component: TerminalPage,
   validateSearch: (search: Record<string, unknown>): TerminalSearch => ({
     machineId: String(search.machineId ?? ''),
+    provider: String(search.provider ?? 'claude-code'),
     cwd: String(search.cwd ?? '.'),
     initialText: search.initialText ? String(search.initialText) : undefined,
   }),
