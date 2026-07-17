@@ -37,17 +37,31 @@ func (p *Provider) SetMachineID(id string) { p.machineID = id }
 // Name implements AgentProvider.
 func (p *Provider) Name() string { return "codex" }
 
-// isCodexProcess heuristically identifies a Codex CLI process. Excludes our own
-// agent binary and obvious non-matches.
+// isCodexProcess heuristically identifies a Codex *CLI* process. Excludes our
+// own agent and the Codex Desktop app (an Electron bundle whose helper
+// processes — renderers, services, crashpad — are not terminal sessions).
 func isCodexProcess(name, cmdline string) bool {
 	l := strings.ToLower(cmdline)
 	if strings.Contains(l, "mission-control-agent") {
 		return false
 	}
+	// Exclude the macOS/Electron Codex Desktop app and its helpers.
+	if strings.Contains(l, "codex.app/") ||
+		strings.Contains(l, ".app/contents") ||
+		strings.Contains(l, "crashpad") ||
+		strings.Contains(l, "renderer") ||
+		strings.Contains(l, "(service)") ||
+		strings.Contains(l, "sparkle") ||
+		strings.Contains(l, "computer-use") ||
+		strings.Contains(l, "code-mode-host") ||
+		strings.Contains(l, "app-server") ||
+		strings.Contains(l, "cua_node") {
+		return false
+	}
 	if name == "codex" || name == "codex-tui" {
 		return true
 	}
-	// binary path ending in /codex, or `codex exec`/`codex tui` invocations
+	// A real terminal CLI: binary path ending in /codex, or codex exec/tui.
 	return strings.HasSuffix(l, "/codex") ||
 		strings.Contains(l, "/codex ") ||
 		strings.Contains(l, "codex exec") ||

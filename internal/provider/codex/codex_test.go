@@ -123,6 +123,18 @@ func TestIsCodexProcess(t *testing.T) {
 	if isCodexProcess("bash", "echo hello") {
 		t.Fatal("unrelated process matched")
 	}
+	// The Codex Desktop app (Electron) and its helpers must NOT match.
+	desktop := []string{
+		"/Applications/Codex.app/Contents/Resources/codex -c features.code_mode_host=true app-server",
+		"/Applications/Codex.app/Contents/Frameworks/Codex Framework.framework/Versions/150/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)",
+		"/Applications/Codex.app/Contents/Resources/codex-code-mode-host",
+		"/Users/x/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService",
+	}
+	for _, cl := range desktop {
+		if isCodexProcess("codex", cl) {
+			t.Fatalf("desktop-app process should be excluded: %q", cl)
+		}
+	}
 }
 
 func contains(s, sub string) bool {
