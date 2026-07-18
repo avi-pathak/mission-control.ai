@@ -51,6 +51,8 @@ has a fallback **except `DATABASE_URL`**, which defaults to SQLite on the
 | `staticDir` | `MC_STATIC_DIR` | `/app/web` (image) | Dashboard SPA dir. |
 | `agentBinDir` | `MC_AGENT_BIN_DIR` | `/app/agents` (image) | Agent binaries served at `/download`. |
 | `smtp.*` | `MC_SMTP_HOST` / `_PORT` / `_USER` / `_PASS` / `_FROM` | disabled | Optional invite emails; if unset, links are shown in the UI. |
+| `webPush.*` | `MC_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` / `MC_VAPID_SUBJECT` | disabled | Web Push (VAPID) keys for blocked-session notifications. Generate with `make vapid`. |
+| `blockedNotifySeconds` | `MC_BLOCKED_NOTIFY_SECONDS` | `30` | Notify when a session waits for approval this long (0 = off). |
 
 ### TLS / production
 
@@ -148,7 +150,36 @@ scripts use these, so no GitHub Releases or external hosting is required.
 
 ---
 
-## 5. Published Docker images
+## 5. Blocked-session notifications (PWA / Web Push)
+
+The dashboard is an installable PWA. When a session stays **blocked**
+(`waiting_approval`) longer than `MC_BLOCKED_NOTIFY_SECONDS` (default 30), the
+server sends a **Web Push** notification to every subscribed device in the
+workspace — **even when the dashboard tab is closed**.
+
+Setup:
+
+1. **Generate VAPID keys** on the server host:
+   ```bash
+   make vapid          # or: go run ./cmd/vapidgen
+   ```
+2. Set the printed values as env (or in `server.yaml` under `webPush`):
+   `MC_VAPID_PUBLIC_KEY`, `MC_VAPID_PRIVATE_KEY`, `MC_VAPID_SUBJECT`.
+   Push is disabled if the keys are empty.
+3. In the dashboard: **Settings → Notifications → Enable notifications**, grant
+   the browser permission, and (optionally) **Send test**. Install the app
+   ("Add to Home Screen" / install icon) for the best mobile experience.
+
+Notes:
+- Requires **HTTPS** in production (service workers only run on secure origins;
+  `localhost` is exempt for local testing).
+- Each session is notified **once per blocked episode**; it re-arms if the
+  session unblocks and blocks again.
+- Dead subscriptions (uninstalled/expired) are pruned automatically.
+
+---
+
+## 6. Published Docker images
 
 Images are on Docker Hub:
 

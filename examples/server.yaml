@@ -54,4 +54,16 @@ smtp:
   password: ""
   from: ""
 
+# Web Push notifications for blocked sessions. Generate keys with `make vapid`.
+# If keys are empty, push is disabled. Env: MC_VAPID_PUBLIC_KEY / _PRIVATE_KEY /
+# _SUBJECT and MC_BLOCKED_NOTIFY_SECONDS.
+webPush:
+  vapidPublicKey: ""
+  vapidPrivateKey: ""
+  subject: "mailto:admin@example.com"
+
+# Notify when a session has been waiting for approval this many seconds
+# (0 disables). Default 30.
+blockedNotifySeconds: 30
+
 logLevel: "info"

@@ -41,6 +41,12 @@ services:
       MC_SMTP_USER: ""
       MC_SMTP_PASS: ""
       MC_SMTP_FROM: ""
+      # Web Push for blocked-session notifications. Generate keys with
+      # `make vapid`. Leave empty to disable push.
+      MC_VAPID_PUBLIC_KEY: ""
+      MC_VAPID_PRIVATE_KEY: ""
+      MC_VAPID_SUBJECT: "mailto:admin@example.com"
+      MC_BLOCKED_NOTIFY_SECONDS: "30"
     depends_on:
       postgres:
         condition: service_healthy

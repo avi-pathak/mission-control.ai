@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/avi-pathak/mission-control.ai/internal/auth"
 	"github.com/avi-pathak/mission-control.ai/internal/email"
+	"github.com/avi-pathak/mission-control.ai/internal/push"
 	"github.com/avi-pathak/mission-control.ai/internal/config"
 	"github.com/avi-pathak/mission-control.ai/internal/hub"
 	"github.com/avi-pathak/mission-control.ai/internal/state"
@@ -36,6 +37,7 @@ type Server struct {
 	store *store.Store
 	auth  *auth.Manager
 	email *email.Sender
+	push  *push.Sender
 	http  *http.Server
 
 	keysMu    sync.RWMutex
@@ -62,11 +64,18 @@ func New(cfg config.Server, log *zap.Logger, st *store.Store) *Server {
 			Host: cfg.SMTP.Host, Port: cfg.SMTP.Port, Username: cfg.SMTP.Username,
 			Password: cfg.SMTP.Password, From: cfg.SMTP.From,
 		}),
+		push: push.New(push.Config{
+			VAPIDPublic: cfg.WebPush.VAPIDPublic, VAPIDPrivate: cfg.WebPush.VAPIDPrivate,
+			Subject: cfg.WebPush.Subject,
+		}),
 		agentKeys: make(map[string]agentKeyInfo),
 		termRouter: newTerminalRouter(),
 	}
 	if s.email.Enabled() {
 		log.Info("SMTP configured; invite emails enabled", zap.String("from", cfg.SMTP.From))
+	}
+	if s.push.Enabled() {
+		log.Info("Web Push configured; blocked-session notifications available")
 	}
 	s.reloadAgentKeys()
 	// Seed per-org event rings with recent history so first snapshots include a
@@ -144,6 +153,11 @@ func (s *Server) router() http.Handler {
 		r.Use(s.requireUser)
 		r.Get("/me", s.handleMe)
 		r.Post("/me/password", s.handleChangePassword)
+		// Web Push (blocked-session notifications).
+		r.Get("/push/vapid-key", s.handlePushVAPIDKey)
+		r.Post("/push/subscribe", s.handlePushSubscribe)
+		r.Post("/push/unsubscribe", s.handlePushUnsubscribe)
+		r.Post("/push/test", s.handlePushTest)
 		r.Get("/machines", s.handleListMachines)
 		r.Delete("/machines/{id}", s.handleDeleteMachine)
 		r.Get("/sessions", s.handleListSessions)
@@ -192,6 +206,7 @@ func (s *Server) router() http.Handler {
 func (s *Server) Run(ctx context.Context) error {
 	go s.hub.Run()
 	go s.retentionLoop(ctx)
+	go s.blockedNotifyLoop(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {

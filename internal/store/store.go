@@ -193,7 +193,7 @@ func Open(dsn string, log *zap.Logger) (*Store, error) {
 	if err := db.AutoMigrate(
 		&Org{}, &User{}, &Invite{}, &PublishedFile{},
 		&Machine{}, &Session{}, &LogLine{}, &MetricSample{}, &Event{},
-		&EnrollmentToken{}, &AgentKey{},
+		&EnrollmentToken{}, &AgentKey{}, &PushSubscription{},
 	); err != nil {
 		return nil, err
 	}

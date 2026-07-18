@@ -28,6 +28,16 @@ func spaHandler(dir string) http.HandlerFunc {
 			if strings.HasPrefix(clean, "/assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
+			// The service worker must be served at root scope, uncached, so
+			// updates roll out and it can control the whole app.
+			if clean == "/sw.js" {
+				w.Header().Set("Cache-Control", "no-cache")
+				w.Header().Set("Service-Worker-Allowed", "/")
+			}
+			// Correct MIME for the web app manifest.
+			if clean == "/manifest.webmanifest" {
+				w.Header().Set("Content-Type", "application/manifest+json")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}

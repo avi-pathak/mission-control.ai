@@ -35,6 +35,10 @@ build:
 	go build -o bin/mission-control-server ./apps/server
 	go build -o bin/mission-control-agent ./apps/agent
 
+# Print a fresh Web Push VAPID key pair (for blocked-session notifications).
+vapid:
+	@go run ./cmd/vapidgen
+
 # Cross-build the agent for every supported platform into bin/agents/. The server
 # serves these at /download/<name> for the install scripts. Names MUST match what
 # install.sh / install.ps1 request: mission-control-agent-<os>-<arch>[.exe].

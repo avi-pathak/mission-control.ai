@@ -1,8 +1,15 @@
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@mc/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
+import {
+  disablePush,
+  enablePush,
+  isSubscribed,
+  pushSupport,
+  type PushSupport,
+} from '../lib/push';
 import { useAuthStore } from '../store/auth';
 
 const inputClass =
@@ -30,9 +37,118 @@ export function SettingsPage() {
       </header>
 
       <ChangePasswordCard />
+      <NotificationsCard />
       <MembersCard isAdmin={isAdmin} selfId={user?.id ?? ''} />
       {isAdmin && <InviteCard />}
     </div>
+  );
+}
+
+function NotificationsCard() {
+  const [support, setSupport] = useState<PushSupport>('default');
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Only meaningful when the server has push configured.
+  const vapid = useQuery({ queryKey: ['push-vapid'], queryFn: api.pushVapidKey });
+
+  useEffect(() => {
+    setSupport(pushSupport());
+    isSubscribed().then(setSubscribed).catch(() => {});
+  }, []);
+
+  const serverEnabled = vapid.data?.enabled ?? false;
+
+  const toggle = async (on: boolean) => {
+    setMsg(null);
+    setBusy(true);
+    try {
+      if (on) {
+        const ok = await enablePush();
+        setSubscribed(ok);
+        setSupport(pushSupport());
+        setMsg(
+          ok
+            ? { ok: true, text: 'Notifications enabled on this device.' }
+            : { ok: false, text: 'Permission was not granted.' },
+        );
+      } else {
+        await disablePush();
+        setSubscribed(false);
+        setMsg({ ok: true, text: 'Notifications disabled on this device.' });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Something went wrong.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = useMutation({
+    mutationFn: () => api.pushTest(),
+    onSuccess: (r) =>
+      setMsg({ ok: true, text: `Test notification sent to ${r.sent} device(s).` }),
+    onError: (e) =>
+      setMsg({
+        ok: false,
+        text: e instanceof ApiError ? e.message : 'Could not send test notification.',
+      }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Notifications</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="mb-3 text-sm text-zinc-400">
+          Get a push notification when one of your sessions is blocked (waiting for approval)
+          for longer than the configured threshold — even when this tab is closed.
+        </p>
+
+        {support === 'unsupported' ? (
+          <p className="text-xs text-amber-400">
+            This browser doesn't support push notifications.
+          </p>
+        ) : !serverEnabled ? (
+          <p className="text-xs text-amber-400">
+            Push isn't configured on this server. Set VAPID keys (see docs) to enable it.
+          </p>
+        ) : support === 'denied' ? (
+          <p className="text-xs text-amber-400">
+            Notifications are blocked in your browser settings. Allow them for this site, then
+            reload.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            {subscribed ? (
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => toggle(false)}>
+                {busy ? 'Working…' : 'Disable notifications'}
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" disabled={busy} onClick={() => toggle(true)}>
+                {busy ? 'Working…' : 'Enable notifications'}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!subscribed || test.isPending}
+              onClick={() => test.mutate()}
+            >
+              {test.isPending ? 'Sending…' : 'Send test'}
+            </Button>
+          </div>
+        )}
+
+        {msg && (
+          <p className={`mt-3 text-xs ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {msg.text}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

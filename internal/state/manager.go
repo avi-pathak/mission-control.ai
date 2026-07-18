@@ -189,6 +189,31 @@ func (m *Manager) Session(orgID, id string) (protocol.Session, bool) {
 	return s, ok
 }
 
+// OrgSessions is a snapshot of one org's sessions, used by background scans.
+type OrgSessions struct {
+	OrgID    string
+	Sessions []protocol.Session
+}
+
+// AllSessions returns a snapshot of every org's sessions (copied out under the
+// read lock). Used by the blocked-session notifier.
+func (m *Manager) AllSessions() []OrgSessions {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]OrgSessions, 0, len(m.orgs))
+	for orgID, os := range m.orgs {
+		if len(os.sessions) == 0 {
+			continue
+		}
+		sessions := make([]protocol.Session, 0, len(os.sessions))
+		for _, s := range os.sessions {
+			sessions = append(sessions, s)
+		}
+		out = append(out, OrgSessions{OrgID: orgID, Sessions: sessions})
+	}
+	return out
+}
+
 // Snapshot returns a stable, sorted copy of an org's live state.
 func (m *Manager) Snapshot(orgID string) protocol.Snapshot {
 	m.mu.RLock()

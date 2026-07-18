@@ -32,6 +32,14 @@ type Retention struct {
 	MetricHours int `yaml:"metricHours"`
 }
 
+// WebPush holds optional Web Push (VAPID) settings. When keys are empty, push
+// notifications are disabled.
+type WebPush struct {
+	VAPIDPublic  string `yaml:"vapidPublicKey"`
+	VAPIDPrivate string `yaml:"vapidPrivateKey"`
+	Subject      string `yaml:"subject"` // mailto: or https: contact for VAPID
+}
+
 // Server is the top-level server configuration.
 type Server struct {
 	ListenAddr  string    `yaml:"listenAddr"`
@@ -45,18 +53,24 @@ type Server struct {
 	CORSOrigins []string  `yaml:"corsOrigins"`
 	TLS         TLS       `yaml:"tls"`
 	SMTP        SMTP      `yaml:"smtp"`
+	WebPush     WebPush   `yaml:"webPush"`
 	Retention   Retention `yaml:"retention"`
 	LogLevel    string    `yaml:"logLevel"`
+	// BlockedNotifySeconds: notify when a session has been waiting_approval this
+	// long. 0 disables blocked-session notifications.
+	BlockedNotifySeconds int `yaml:"blockedNotifySeconds"`
 }
 
 // Default returns a config with sensible defaults.
 func Default() Server {
 	return Server{
-		ListenAddr:  ":8080",
-		DatabaseURL: "mission-control.db",
-		CORSOrigins: []string{"*"},
-		Retention:   Retention{LogHours: 72, MetricHours: 72},
-		LogLevel:    "info",
+		ListenAddr:           ":8080",
+		DatabaseURL:          "mission-control.db",
+		CORSOrigins:          []string{"*"},
+		Retention:            Retention{LogHours: 72, MetricHours: 72},
+		LogLevel:             "info",
+		BlockedNotifySeconds: 30,
+		WebPush:              WebPush{Subject: "mailto:admin@example.com"},
 	}
 }
 
@@ -143,6 +157,20 @@ func Load(path string) (Server, error) {
 	if v := os.Getenv("MC_RETENTION_METRIC_HOURS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.Retention.MetricHours = n
+		}
+	}
+	if v := os.Getenv("MC_VAPID_PUBLIC_KEY"); v != "" {
+		cfg.WebPush.VAPIDPublic = v
+	}
+	if v := os.Getenv("MC_VAPID_PRIVATE_KEY"); v != "" {
+		cfg.WebPush.VAPIDPrivate = v
+	}
+	if v := os.Getenv("MC_VAPID_SUBJECT"); v != "" {
+		cfg.WebPush.Subject = v
+	}
+	if v := os.Getenv("MC_BLOCKED_NOTIFY_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.BlockedNotifySeconds = n
 		}
 	}
 	return cfg, nil

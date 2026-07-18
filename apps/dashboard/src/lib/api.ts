@@ -166,6 +166,14 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
+  // Web Push (blocked-session notifications)
+  pushVapidKey: () => req<{ publicKey: string; enabled: boolean }>('/push/vapid-key'),
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    req<void>('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  pushUnsubscribe: (endpoint: string) =>
+    req<void>('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+  pushTest: () => req<{ sent: number }>('/push/test', { method: 'POST' }),
+
   // Org admin
   orgUsers: () => req<AuthUser[]>('/org/users'),
   setUserRole: (id: string, role: string) =>
