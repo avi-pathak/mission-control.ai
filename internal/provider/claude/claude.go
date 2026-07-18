@@ -58,17 +58,50 @@ func (p *Provider) Launch(ctx context.Context, cwd string) (provider.LaunchSpec,
 	}, nil
 }
 
-// isClaudeProcess heuristically identifies a Claude Code CLI process.
+// isClaudeProcess heuristically identifies a Claude Code *CLI* process. It must
+// exclude (a) our own agent, (b) the Claude **desktop app** and its helper
+// processes (renderers, crashpad, the "disclaimer"/updater helpers, and the
+// bundled claude.app helper), and (c) tool subprocesses the CLI spawns (grep,
+// ugrep, etc.) which may mention a claude path in their args. Without these
+// exclusions one logical session shows up as several — e.g. a blocked desktop
+// session appears twice (disclaimer helper + app helper).
 func isClaudeProcess(name string, cmdline string) bool {
 	l := strings.ToLower(cmdline)
-	if strings.Contains(name, "claude") {
+	if strings.Contains(l, "mission-control-agent") {
+		return false
+	}
+	// Exclude the macOS Claude desktop app and its Electron/helper processes.
+	// Note: the CLI installed *under* the app bundle lives at
+	// ".../claude-code/<ver>/claude" — allow that (checked below) but reject the
+	// app's own helper executables and support processes.
+	if strings.Contains(l, ".app/contents/helpers") ||
+		strings.Contains(l, ".app/contents/frameworks") ||
+		strings.Contains(l, ".app/contents/macos/claude helper") ||
+		strings.Contains(l, "claude helper") ||
+		strings.Contains(l, "crashpad") ||
+		strings.Contains(l, "--type=renderer") ||
+		strings.Contains(l, "--type=utility") ||
+		strings.Contains(l, "--type=gpu") ||
+		strings.Contains(l, "/helpers/disclaimer") ||
+		strings.Contains(l, "sparkle") {
+		return false
+	}
+	// Exclude tool subprocesses spawned by the CLI (they can carry claude paths
+	// in --exclude-dir / cwd args but are not sessions themselves).
+	if strings.HasPrefix(l, "ugrep") || strings.HasPrefix(l, "grep") ||
+		strings.HasPrefix(l, "rg ") || strings.HasPrefix(l, "fd ") {
+		return false
+	}
+	// The process's own executable name is exactly "claude" (standalone CLI).
+	if name == "claude" {
 		return true
 	}
-	// node-based CLI: "node .../claude" or "... @anthropic-ai/claude-code"
-	return strings.Contains(l, "claude-code") ||
+	// node-based / bundled CLI: a path ending in "/claude", "claude-code", or the
+	// anthropic package — but NOT merely mentioning claude somewhere in args.
+	return strings.HasSuffix(l, "/claude") ||
 		strings.Contains(l, "/claude ") ||
-		strings.HasSuffix(l, "/claude") ||
-		strings.Contains(l, "anthropic-ai/claude")
+		strings.Contains(l, "anthropic-ai/claude-code") ||
+		strings.Contains(l, "claude-code/") && strings.Contains(l, "/claude")
 }
 
 // Discover implements AgentProvider.
