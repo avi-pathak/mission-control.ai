@@ -20,7 +20,10 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.6
+          # Must be a golangci-lint built with Go >= the go.mod target (1.25).
+          # v2.8.0 is built with go1.25; older v2.x (e.g. 2.1.x) use go1.24 and
+          # fail with "language version used to build golangci-lint is lower".
+          version: v2.8.0
       - name: Test
         run: go test -race ./...
       - name: Build
