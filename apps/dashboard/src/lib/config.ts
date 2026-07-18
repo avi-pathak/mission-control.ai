@@ -1,6 +1,6 @@
 /** Runtime configuration sourced from Vite env. */
 export const config = {
-  apiUrl: import.meta.env.VITE_API_URL || '/api',
+  apiUrl: import.meta.env.VITE_API_URL || '/api/v1',
   wsUrl: import.meta.env.VITE_WS_URL || '/ws',
 };
 

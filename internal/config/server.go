@@ -3,6 +3,8 @@ package config
 
 import (
 	"os"
+	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,6 +14,16 @@ type TLS struct {
 	Enabled  bool   `yaml:"enabled"`
 	CertFile string `yaml:"certFile"`
 	KeyFile  string `yaml:"keyFile"`
+}
+
+// SMTP holds optional outbound email settings. When Host is empty, email is
+// disabled and invite links are only returned via the API.
+type SMTP struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
 }
 
 // Retention controls how long historical rows are kept.
@@ -32,6 +44,7 @@ type Server struct {
 	AgentBinDir string    `yaml:"agentBinDir"` // dir of prebuilt agent binaries to serve at /download
 	CORSOrigins []string  `yaml:"corsOrigins"`
 	TLS         TLS       `yaml:"tls"`
+	SMTP        SMTP      `yaml:"smtp"`
 	Retention   Retention `yaml:"retention"`
 	LogLevel    string    `yaml:"logLevel"`
 }
@@ -47,9 +60,12 @@ func Default() Server {
 	}
 }
 
-// Load reads a YAML config file, applying defaults and env overrides.
-// Env: MC_LISTEN_ADDR, MC_PUBLIC_URL, DATABASE_URL, JWT_SECRET, ADMIN_EMAIL,
-// ADMIN_PASSWORD, MC_LOG_LEVEL.
+// Load reads a YAML config file, applying defaults and env overrides. Env wins
+// over YAML. Recognized env vars:
+//   MC_LISTEN_ADDR, MC_PUBLIC_URL, DATABASE_URL, JWT_SECRET,
+//   ADMIN_EMAIL, ADMIN_PASSWORD, MC_LOG_LEVEL, MC_STATIC_DIR, MC_AGENT_BIN_DIR,
+//   MC_CORS_ORIGINS, MC_RETENTION_LOG_HOURS, MC_RETENTION_METRIC_HOURS,
+//   MC_SMTP_HOST, MC_SMTP_PORT, MC_SMTP_USER, MC_SMTP_PASS, MC_SMTP_FROM
 func Load(path string) (Server, error) {
 	cfg := Default()
 	if path != "" {
@@ -87,6 +103,47 @@ func Load(path string) (Server, error) {
 	}
 	if v := os.Getenv("MC_AGENT_BIN_DIR"); v != "" {
 		cfg.AgentBinDir = v
+	}
+	if v := os.Getenv("MC_SMTP_HOST"); v != "" {
+		cfg.SMTP.Host = v
+	}
+	if v := os.Getenv("MC_SMTP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.SMTP.Port = n
+		}
+	}
+	if v := os.Getenv("MC_SMTP_USER"); v != "" {
+		cfg.SMTP.Username = v
+	}
+	if v := os.Getenv("MC_SMTP_PASS"); v != "" {
+		cfg.SMTP.Password = v
+	}
+	if v := os.Getenv("MC_SMTP_FROM"); v != "" {
+		cfg.SMTP.From = v
+	}
+	// Comma-separated list of allowed CORS origins, e.g.
+	// "https://app.example.com,https://admin.example.com".
+	if v := os.Getenv("MC_CORS_ORIGINS"); v != "" {
+		parts := strings.Split(v, ",")
+		origins := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				origins = append(origins, t)
+			}
+		}
+		if len(origins) > 0 {
+			cfg.CORSOrigins = origins
+		}
+	}
+	if v := os.Getenv("MC_RETENTION_LOG_HOURS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Retention.LogHours = n
+		}
+	}
+	if v := os.Getenv("MC_RETENTION_METRIC_HOURS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Retention.MetricHours = n
+		}
 	}
 	return cfg, nil
 }

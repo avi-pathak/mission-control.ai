@@ -93,6 +93,18 @@ func (m *Manager) SetMachineOnline(orgID, id string, online bool) (protocol.Mach
 	return mc, true
 }
 
+// IsMachineOnline reports whether a machine is currently connected in an org.
+func (m *Manager) IsMachineOnline(orgID, id string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	os, ok := m.orgs[orgID]
+	if !ok {
+		return false
+	}
+	mc, ok := os.machines[id]
+	return ok && mc.Online
+}
+
 // ApplyHeartbeat updates live host metrics for a machine.
 func (m *Manager) ApplyHeartbeat(orgID string, hb protocol.AgentHeartbeat, ts int64) (protocol.Machine, bool) {
 	m.mu.Lock()

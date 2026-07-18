@@ -10,39 +10,12 @@ interface Props {
   onClose: () => void;
 }
 
-type Method = 'script' | 'docker' | 'binary';
-
-const DOCKER_IMAGE = 'avipathak/mission-control-agent';
-
-/** Rewrite a localhost/127.0.0.1 server URL to host.docker.internal so the
- *  command actually works from inside a container on Docker Desktop. */
-function dockerServerUrl(serverUrl: string): string {
-  return serverUrl.replace(/(\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/, '$1host.docker.internal$3');
-}
+type Method = 'script' | 'binary';
 
 function methodCommand(method: Method, t: CreateEnrollTokenResp): string {
   switch (method) {
     case 'script':
       return t.command;
-    case 'docker': {
-      const url = dockerServerUrl(t.serverUrl);
-      const isLocal = url !== t.serverUrl;
-      return [
-        '# Linux host: --pid=host + mounts let the agent see the HOST’s Claude',
-        '# sessions. On macOS/Windows a container CANNOT see host processes —',
-        '# use the Install script or Binary method there instead.',
-        ...(isLocal
-          ? ['# (server is local → using host.docker.internal so the container can reach it)']
-          : []),
-        'docker run -d --name mission-control-agent \\',
-        '  --pid=host \\',
-        '  -v "$HOME/.claude:/host/.claude:ro" \\',
-        '  -e MC_CLAUDE_DIR="/host/.claude" \\',
-        `  -e MC_SERVER_URL="${url}" \\`,
-        `  -e MC_ENROLL_TOKEN="${t.token}" \\`,
-        `  ${DOCKER_IMAGE}`,
-      ].join('\n');
-    }
     case 'binary': {
       const httpBase = t.serverUrl.replace(/^ws/, 'http');
       return [
@@ -51,7 +24,8 @@ function methodCommand(method: Method, t: CreateEnrollTokenResp): string {
         `#    macOS (Intel):         ${httpBase}/download/mission-control-agent-darwin-amd64`,
         `#    Linux (x86_64):        ${httpBase}/download/mission-control-agent-linux-amd64`,
         `#    Linux (arm64):         ${httpBase}/download/mission-control-agent-linux-arm64`,
-        `#    Windows:               ${httpBase}/download/mission-control-agent-windows-amd64.exe`,
+        `#    Windows (x86_64):      ${httpBase}/download/mission-control-agent-windows-amd64.exe`,
+        `#    Windows (arm64):       ${httpBase}/download/mission-control-agent-windows-arm64.exe`,
         '# 2. chmod +x it, then run with:',
         `MC_SERVER_URL="${t.serverUrl}" \\`,
         `MC_ENROLL_TOKEN="${t.token}" \\`,
@@ -63,7 +37,6 @@ function methodCommand(method: Method, t: CreateEnrollTokenResp): string {
 
 const METHODS: { id: Method; label: string; hint: string }[] = [
   { id: 'script', label: 'Install script', hint: 'One-line curl installer (Linux/macOS)' },
-  { id: 'docker', label: 'Docker', hint: 'Run on a Linux host (sees host sessions via --pid=host)' },
   { id: 'binary', label: 'Binary', hint: 'Prebuilt executable + env vars' },
 ];
 

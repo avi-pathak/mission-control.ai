@@ -18,7 +18,8 @@ Mission Control gives you a single, real-time view of every AI coding session ru
 - **Rich session pages** — Overview, Logs (ANSI, infinite scroll, search), read-only Terminal, Metrics (CPU/RAM graphs), and Git.
 - **Machine inventory** — hostname, OS, CPU, RAM, live health.
 - **Control plane** — stop / restart sessions remotely.
-- **Provider system** — `AgentProvider` interface; Claude Code first, with Codex CLI / Gemini CLI / Aider / OpenHands / Roo / Continue designed in.
+- **Provider system** — `AgentProvider` interface; **Claude Code, Codex CLI, and Gemini CLI** supported, with Aider / OpenHands / Roo / Continue designed in.
+- **Multi-tenant** — workspaces with admin/member roles, admin-approved signups, and per-workspace machine isolation (one machine = one workspace).
 - **Secure by default** — API-key auth, TLS-ready, no anonymous agents.
 - **One command** — `docker compose up`.
 
@@ -46,9 +47,9 @@ cd deploy && docker compose up
 
 Open **http://localhost:8080** and sign in with the `ADMIN_EMAIL` /
 `ADMIN_PASSWORD` from `docker-compose.yml`, then use **Add Machine** to enroll an
-agent (script / Docker / binary — each with a one-time token).
+agent (install script / binary — each with a one-time token).
 
-The single server serves everything on one port: `/api` (REST), `/ws`
+The single server serves everything on one port: `/api/v1` (REST), `/ws`
 (WebSocket) and the dashboard SPA (with history-mode fallback).
 
 ## Development

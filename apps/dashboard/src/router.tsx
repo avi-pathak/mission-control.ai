@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute } from '@tanstack/react-router';
 import { AppLayout } from './components/AppLayout';
 import { ActivityPage } from './pages/ActivityPage';
+import { AdminPage } from './pages/AdminPage';
 import { MachinesPage } from './pages/MachinesPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { SessionPage } from './pages/SessionPage';
@@ -53,6 +54,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminPage,
+});
+
 export interface TerminalSearch {
   machineId: string;
   provider: string;
@@ -80,5 +87,6 @@ export const routeTree = rootRoute.addChildren([
   activityRoute,
   tokensRoute,
   settingsRoute,
+  adminRoute,
   terminalRoute,
 ]);

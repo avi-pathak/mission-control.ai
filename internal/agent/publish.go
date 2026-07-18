@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Publish uploads a file to the server's /api/publish endpoint using the
+// Publish uploads a file to the server's /api/v1/publish endpoint using the
 // agent's durable key. sessionID is optional.
 func Publish(serverURL, apiKey, path, sessionID string, insecure bool) error {
 	if apiKey == "" {
@@ -31,7 +31,7 @@ func Publish(serverURL, apiKey, path, sessionID string, insecure bool) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", base+"/api/publish", bytes.NewReader(data))
+	req, err := http.NewRequest("POST", base+"/api/v1/publish", bytes.NewReader(data))
 	if err != nil {
 		return err
 	}

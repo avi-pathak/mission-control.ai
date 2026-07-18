@@ -10,12 +10,27 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Roles.
+// Roles. The model is two-tier: admin (manages the workspace, members, and
+// machines) and member (uses shared machines). RoleOwner is a deprecated alias
+// kept only for migration of legacy rows; treat it as admin.
 const (
-	RoleOwner  = "owner"
 	RoleAdmin  = "admin"
 	RoleMember = "member"
+	RoleOwner  = "owner" // deprecated: legacy, migrated to admin
 )
+
+// IsAdmin reports whether a role has workspace-admin privileges.
+func IsAdmin(role string) bool {
+	return role == RoleAdmin || role == RoleOwner
+}
+
+// NormalizeRole coerces any role string to the two-tier model.
+func NormalizeRole(role string) string {
+	if role == RoleMember {
+		return RoleMember
+	}
+	return RoleAdmin
+}
 
 // ErrInvalidToken is returned when a JWT cannot be validated.
 var ErrInvalidToken = errors.New("invalid token")
@@ -33,10 +48,11 @@ func CheckPassword(hash, pw string) bool {
 
 // Claims is the JWT payload for a dashboard session.
 type Claims struct {
-	UserID string `json:"uid"`
-	OrgID  string `json:"org"`
-	Role   string `json:"role"`
-	Email  string `json:"email"`
+	UserID        string `json:"uid"`
+	OrgID         string `json:"org"`
+	Role          string `json:"role"`
+	Email         string `json:"email"`
+	PlatformAdmin bool   `json:"padmin,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -56,11 +72,18 @@ func NewManager(secret string, ttl time.Duration) *Manager {
 
 // Issue mints a signed token for a user.
 func (m *Manager) Issue(userID, orgID, role, email string, now time.Time) (string, error) {
+	return m.IssueWithAdmin(userID, orgID, role, email, false, now)
+}
+
+// IssueWithAdmin mints a signed token, optionally flagging the user as a
+// platform superadmin.
+func (m *Manager) IssueWithAdmin(userID, orgID, role, email string, platformAdmin bool, now time.Time) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		OrgID:  orgID,
-		Role:   role,
-		Email:  email,
+		UserID:        userID,
+		OrgID:         orgID,
+		Role:          role,
+		Email:         email,
+		PlatformAdmin: platformAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),

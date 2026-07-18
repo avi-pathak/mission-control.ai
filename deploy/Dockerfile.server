@@ -23,7 +23,7 @@ RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o /out/server ./apps/server
 # Cross-compile the CGO-free agent for every supported platform so the server
 # can serve them at /download/<name> (self-hosted, no GitHub releases needed).
 RUN set -eu; mkdir -p /out/agents; \
-    for t in "linux amd64" "linux arm64" "darwin amd64" "darwin arm64" "windows amd64"; do \
+    for t in "linux amd64" "linux arm64" "darwin amd64" "darwin arm64" "windows amd64" "windows arm64"; do \
       set -- $t; os=$1; arch=$2; name="mission-control-agent-${os}-${arch}"; \
       [ "$os" = "windows" ] && name="${name}.exe"; \
       CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "/out/agents/$name" ./apps/agent; \

@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the agent build version.
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // Runtime is the agent daemon.
 type Runtime struct {
@@ -39,7 +39,7 @@ type Runtime struct {
 // New constructs the agent runtime.
 func New(cfg config.Agent, log *zap.Logger, providers []provider.AgentProvider) *Runtime {
 	if cfg.AgentID == "" {
-		cfg.AgentID = deriveAgentID()
+		cfg.AgentID = DeriveAgentID()
 	}
 	hostname := cfg.HostnameOverride
 	if hostname == "" {
@@ -383,7 +383,10 @@ func (r *Runtime) handleTerminalAttach(env *protocol.Envelope) {
 		tmux.CaptureLoop, tmux.SendKeys, tmux.ResizeWindow, tmux.SessionExists)
 }
 
-func deriveAgentID() string {
+// DeriveAgentID returns a stable machine fingerprint based on the host id,
+// falling back to a random uuid if unavailable. Used both at runtime and at
+// enroll time so the server can recognize the same physical machine.
+func DeriveAgentID() string {
 	if info, err := host.Info(); err == nil && info.HostID != "" {
 		return "mc-" + info.HostID
 	}

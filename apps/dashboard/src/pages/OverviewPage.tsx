@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Clock, Coins, Play, Plus, Server } from 'l
 import { Button } from '@mc/ui';
 import { formatCount } from '@mc/shared';
 import { useMachines, useSessions, useLiveStore } from '../store/live';
+import { useAuthStore } from '../store/auth';
 import { StatCard } from '../components/StatCard';
 import { SessionTable } from '../components/SessionTable';
 import { NewSessionDialog } from '../components/NewSessionDialog';
@@ -15,6 +16,8 @@ export function OverviewPage() {
   const sessions = useSessions();
   const machineList = useMachines();
   const machines = useLiveStore((s) => s.machines);
+  const org = useAuthStore((s) => s.org);
+  const wsStatus = useLiveStore((s) => s.status);
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [newOpen, setNewOpen] = useState(false);
 
@@ -59,6 +62,25 @@ export function OverviewPage() {
       </header>
 
       <NewSessionDialog open={newOpen} onClose={() => setNewOpen(false)} />
+
+      {/* Empty-workspace guardrail: explains WHY there's nothing here — the most
+          common cause is agents enrolled under a different workspace. */}
+      {machineList.length === 0 && wsStatus !== 'connecting' && (
+        <div className="flex shrink-0 items-start gap-3 rounded-lg border border-indigo-500/25 bg-indigo-500/[0.07] px-4 py-3 text-sm">
+          <Server className="mt-0.5 h-4 w-4 shrink-0 text-indigo-300" />
+          <div className="text-zinc-300">
+            <div className="font-medium text-zinc-100">
+              No agents in {org?.name ? <span className="text-indigo-300">{org.name}</span> : 'this workspace'} yet
+            </div>
+            <p className="mt-1 text-zinc-400">
+              Agents show up here only if they enrolled with a token from{' '}
+              <span className="text-zinc-200">this workspace</span>. If you installed an agent but
+              don't see it, it may have enrolled under a different workspace — generate a token here
+              via <span className="text-zinc-200">Machines → Add Machine</span> and re-enroll.
+            </p>
+          </div>
+        </div>
+      )}
 
       {counts.waiting > 0 && (
         <button

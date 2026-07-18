@@ -36,6 +36,19 @@ func bearer(r *http.Request) string {
 	return r.URL.Query().Get("token")
 }
 
+// requireSuperadmin gates a route to platform-level superadmins. Must be
+// chained after requireUser (reads claims from context).
+func (s *Server) requireSuperadmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := userClaims(r)
+		if c == nil || !c.PlatformAdmin {
+			writeError(w, http.StatusForbidden, "forbidden", "platform admin only")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // requireUser validates the JWT and injects claims into the request context.
 func (s *Server) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

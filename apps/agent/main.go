@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/avi-pathak/mission-control.ai/internal/provider"
 	"github.com/avi-pathak/mission-control.ai/internal/provider/claude"
 	"github.com/avi-pathak/mission-control.ai/internal/provider/codex"
+	"github.com/avi-pathak/mission-control.ai/internal/provider/gemini"
 	"go.uber.org/zap"
 )
 
@@ -68,6 +70,7 @@ func runDaemon() {
 
 	claude.Register()
 	codex.Register()
+	gemini.Register()
 
 	hostname := cfg.HostnameOverride
 	if hostname == "" {
@@ -75,6 +78,11 @@ func runDaemon() {
 	}
 
 	if err := agent.Bootstrap(&cfg, hostname, log); err != nil {
+		if errors.Is(err, agent.ErrAlreadyRegistered) {
+			log.Error("This machine is already registered to another workspace. " +
+				"Ask an admin to reassign it (Admin → Machines), then re-run with a token from the right workspace.")
+			os.Exit(1)
+		}
 		log.Fatal("enrollment failed", zap.Error(err))
 	}
 

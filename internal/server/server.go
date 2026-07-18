@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/avi-pathak/mission-control.ai/internal/auth"
+	"github.com/avi-pathak/mission-control.ai/internal/email"
 	"github.com/avi-pathak/mission-control.ai/internal/config"
 	"github.com/avi-pathak/mission-control.ai/internal/hub"
 	"github.com/avi-pathak/mission-control.ai/internal/state"
@@ -34,6 +35,7 @@ type Server struct {
 	state *state.Manager
 	store *store.Store
 	auth  *auth.Manager
+	email *email.Sender
 	http  *http.Server
 
 	keysMu    sync.RWMutex
@@ -56,8 +58,15 @@ func New(cfg config.Server, log *zap.Logger, st *store.Store) *Server {
 		state:     state.New(),
 		store:     st,
 		auth:      auth.NewManager(secret, 0),
+		email: email.New(email.Config{
+			Host: cfg.SMTP.Host, Port: cfg.SMTP.Port, Username: cfg.SMTP.Username,
+			Password: cfg.SMTP.Password, From: cfg.SMTP.From,
+		}),
 		agentKeys: make(map[string]agentKeyInfo),
 		termRouter: newTerminalRouter(),
+	}
+	if s.email.Enabled() {
+		log.Info("SMTP configured; invite emails enabled", zap.String("from", cfg.SMTP.From))
 	}
 	s.reloadAgentKeys()
 	// Seed per-org event rings with recent history so first snapshots include a
@@ -68,6 +77,14 @@ func New(cfg config.Server, log *zap.Logger, st *store.Store) *Server {
 		}
 	}
 	s.bootstrapAdmin()
+	// Backfill users that predate the approval flow (empty status) to active.
+	if err := s.store.ActivateLegacyUsers(); err != nil {
+		s.log.Warn("activate legacy users", zap.Error(err))
+	}
+	// Collapse legacy "owner" role into "admin" (two-tier model).
+	if err := s.store.MigrateOwnersToAdmin(); err != nil {
+		s.log.Warn("migrate owners to admin", zap.Error(err))
+	}
 	s.registerHubHandlers()
 	s.http = &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -114,18 +131,19 @@ func (s *Server) router() http.Handler {
 	})
 
 	// Public auth endpoints.
-	r.Post("/api/auth/register", s.handleRegister)
-	r.Post("/api/auth/login", s.handleLogin)
-	r.Post("/api/auth/accept-invite", s.handleAcceptInvite)
+	r.Post("/api/v1/auth/register", s.handleRegister)
+	r.Post("/api/v1/auth/login", s.handleLogin)
+	r.Post("/api/v1/auth/accept-invite", s.handleAcceptInvite)
 
 	// Agent-authenticated endpoints (agent key via X-API-Key).
-	r.Post("/api/enroll", s.handleEnroll)
-	r.Post("/api/publish", s.handlePublish)
+	r.Post("/api/v1/enroll", s.handleEnroll)
+	r.Post("/api/v1/publish", s.handlePublish)
 
 	// User (JWT) authenticated, org-scoped endpoints.
-	r.Route("/api", func(r chi.Router) {
+	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/me", s.handleMe)
+		r.Post("/me/password", s.handleChangePassword)
 		r.Get("/machines", s.handleListMachines)
 		r.Delete("/machines/{id}", s.handleDeleteMachine)
 		r.Get("/sessions", s.handleListSessions)
@@ -142,9 +160,22 @@ func (s *Server) router() http.Handler {
 		r.Delete("/enroll-tokens/{token}", s.handleRevokeEnrollToken)
 		// Org administration.
 		r.Get("/org/users", s.handleListOrgUsers)
+		r.Patch("/org/users/{id}", s.handleSetUserRole)
+		r.Delete("/org/users/{id}", s.handleRemoveUser)
 		r.Get("/org/invites", s.handleListInvites)
 		r.Post("/org/invites", s.handleCreateInvite)
 		r.Delete("/org/invites/{token}", s.handleRevokeInvite)
+
+		// Platform administration (superadmin only): signup approval queue.
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireSuperadmin)
+			r.Get("/admin/pending-users", s.handleListPendingUsers)
+			r.Get("/admin/orgs", s.handleAdminListOrgs)
+			r.Post("/admin/users/{id}/approve", s.handleApproveUser)
+			r.Delete("/admin/users/{id}", s.handleRejectUser)
+			r.Get("/admin/machines", s.handleAdminListMachines)
+			r.Post("/admin/machines/{id}/reassign", s.handleReassignMachine)
+		})
 	})
 
 	// Serve the built dashboard SPA (with history fallback) for everything else.

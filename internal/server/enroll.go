@@ -103,9 +103,28 @@ func (s *Server) handleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stable machine id derived from hostname; agents may also supply their own
-	// later via hello. We generate one here to bind the key.
-	machineID := "mc-" + uuid.NewString()
+	// Stable machine id from the agent (host fingerprint). Fall back to a random
+	// id for older agents that don't send one.
+	machineID := strings.TrimSpace(req.MachineID)
+	if machineID == "" {
+		machineID = "mc-" + uuid.NewString()
+	}
+
+	// Enforce one machine = one workspace. Look up the token's org first so we
+	// can tell "same workspace re-install" (allowed) from "different workspace"
+	// (rejected).
+	tokOrg, terr := s.store.EnrollTokenOrg(req.Token)
+	if terr != nil {
+		writeError(w, http.StatusUnauthorized, "invalid_token", "enrollment token is invalid, expired, used, or revoked")
+		return
+	}
+	if existing, ok := s.store.AgentKeyByMachine(machineID); ok && existing.OrgID != tokOrg {
+		s.log.Warn("enroll rejected: machine already in another workspace",
+			zap.String("machineId", machineID), zap.String("have", existing.OrgID), zap.String("want", tokOrg))
+		writeError(w, http.StatusConflict, "machine_already_registered",
+			"This machine is already registered to another workspace. Ask an admin to reassign it (Admin → Machines), then re-enroll.")
+		return
+	}
 
 	key, err := s.store.ConsumeEnrollToken(req.Token, machineID, req.Hostname, time.Now())
 	if err != nil {
@@ -117,6 +136,12 @@ func (s *Server) handleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reloadAgentKeys()
+	// Create/refresh a machine row so it's immediately visible + manageable in
+	// the admin view (even before the agent's first WebSocket hello).
+	_ = s.store.UpsertMachine(key.OrgID, protocol.Machine{
+		ID: machineID, Hostname: req.Hostname, OS: req.OS, Arch: req.Arch,
+		LastSeenAt: protocol.NowMillis(),
+	})
 	s.log.Info("machine enrolled", zap.String("machineId", machineID), zap.String("host", req.Hostname))
 
 	writeJSON(w, http.StatusOK, protocol.EnrollResponse{

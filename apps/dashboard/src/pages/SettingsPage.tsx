@@ -2,38 +2,18 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '@mc/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { useAuthStore } from '../store/auth';
+
+const inputClass =
+  'h-9 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 text-sm text-zinc-200 outline-none focus:border-indigo-500/50';
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const org = useAuthStore((s) => s.org);
   const logout = useAuthStore((s) => s.logout);
-  const qc = useQueryClient();
 
-  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('member');
-  const [inviteLink, setInviteLink] = useState('');
-
-  const users = useQuery({ queryKey: ['org-users'], queryFn: api.orgUsers });
-  const invites = useQuery({ queryKey: ['org-invites'], queryFn: api.orgInvites, enabled: isAdmin });
-
-  const createInvite = useMutation({
-    mutationFn: () => api.createInvite(email, role),
-    onSuccess: (res) => {
-      setInviteLink(res.link);
-      setEmail('');
-      qc.invalidateQueries({ queryKey: ['org-invites'] });
-    },
-  });
-  const revokeInvite = useMutation({
-    mutationFn: (token: string) => api.revokeInvite(token),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-invites'] }),
-  });
-
-  const inputClass =
-    'h-9 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 text-sm text-zinc-200 outline-none focus:border-indigo-500/50';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="h-full max-w-3xl space-y-6 overflow-y-auto pr-1">
@@ -49,75 +29,225 @@ export function SettingsPage() {
         </Button>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Members</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-white/[0.05]">
-          {(users.data ?? []).map((u) => (
-            <div key={u.id} className="flex items-center justify-between py-2.5 text-sm">
-              <span className="text-zinc-200">{u.email}</span>
-              <span className="text-xs text-zinc-500">{u.role}</span>
+      <ChangePasswordCard />
+      <MembersCard isAdmin={isAdmin} selfId={user?.id ?? ''} />
+      {isAdmin && <InviteCard />}
+    </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const change = useMutation({
+    mutationFn: () => api.changePassword(current, next),
+    onSuccess: () => {
+      setMsg({ ok: true, text: 'Password updated.' });
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+    },
+    onError: (e) => {
+      const text =
+        e instanceof ApiError && e.code === 'wrong_password'
+          ? 'Current password is incorrect.'
+          : e instanceof ApiError
+            ? e.message
+            : 'Could not update password.';
+      setMsg({ ok: false, text });
+    },
+  });
+
+  const canSubmit = current && next.length >= 8 && next === confirm;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Change password</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid max-w-sm gap-2">
+          <input
+            type="password"
+            placeholder="Current password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            className={inputClass}
+          />
+          <input
+            type="password"
+            placeholder="New password (8+ chars)"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            className={inputClass}
+          />
+          <input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className={inputClass}
+          />
+          {next && confirm && next !== confirm && (
+            <p className="text-xs text-rose-400">Passwords don't match.</p>
+          )}
+          {msg && (
+            <p className={`text-xs ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</p>
+          )}
+          <div>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!canSubmit || change.isPending}
+              onClick={() => change.mutate()}
+            >
+              {change.isPending ? 'Updating…' : 'Update password'}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MembersCard({ isAdmin, selfId }: { isAdmin: boolean; selfId: string }) {
+  const qc = useQueryClient();
+  const users = useQuery({ queryKey: ['org-users'], queryFn: api.orgUsers });
+
+  const setRole = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) => api.setUserRole(id, role),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-users'] }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.removeUser(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-users'] }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Members</CardTitle>
+      </CardHeader>
+      <CardContent className="divide-y divide-white/[0.05]">
+        {(users.data ?? []).map((u) => {
+          const isSelf = u.id === selfId;
+          return (
+            <div key={u.id} className="flex items-center justify-between gap-2 py-2.5 text-sm">
+              <span className="truncate text-zinc-200">
+                {u.email} {isSelf && <span className="text-xs text-zinc-500">(you)</span>}
+              </span>
+              <div className="flex items-center gap-2">
+                {isAdmin && !isSelf ? (
+                  <>
+                    <select
+                      className="h-8 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2 text-xs text-zinc-200 outline-none focus:border-indigo-500/50"
+                      value={u.role}
+                      disabled={setRole.isPending}
+                      onChange={(e) => setRole.mutate({ id: u.id, role: e.target.value })}
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button
+                      onClick={() => remove.mutate(u.id)}
+                      className="text-zinc-500 hover:text-rose-400"
+                      title="Remove member"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-zinc-500">{u.role}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InviteCard() {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('member');
+  const [result, setResult] = useState<{ link: string; emailed: boolean } | null>(null);
+
+  const invites = useQuery({ queryKey: ['org-invites'], queryFn: api.orgInvites });
+  const createInvite = useMutation({
+    mutationFn: () => api.createInvite(email, role),
+    onSuccess: (res) => {
+      setResult({ link: res.link, emailed: res.emailed });
+      setEmail('');
+      qc.invalidateQueries({ queryKey: ['org-invites'] });
+    },
+  });
+  const revokeInvite = useMutation({
+    mutationFn: (token: string) => api.revokeInvite(token),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['org-invites'] }),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Invite a member</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="email"
+            placeholder="teammate@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={`${inputClass} flex-1`}
+          />
+          <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!email || createInvite.isPending}
+            onClick={() => createInvite.mutate()}
+          >
+            Invite
+          </Button>
+        </div>
+
+        {result && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-black/30 p-3">
+            <div className="text-xs text-zinc-500">
+              {result.emailed
+                ? 'Invite emailed. You can also share this link:'
+                : 'Share this invite link:'}
+            </div>
+            <code className="mt-1 block break-all font-mono text-xs text-indigo-300">
+              {result.link}
+            </code>
+          </div>
+        )}
+
+        <div className="mt-4 divide-y divide-white/[0.05]">
+          {(invites.data ?? []).map((inv) => (
+            <div key={inv.token} className="flex items-center justify-between py-2 text-sm">
+              <span className="text-zinc-300">
+                {inv.email} <span className="text-xs text-zinc-500">· {inv.role}</span>
+              </span>
+              <button
+                onClick={() => revokeInvite.mutate(inv.token)}
+                className="text-zinc-500 hover:text-rose-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
-        </CardContent>
-      </Card>
-
-      {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite a teammate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="email"
-                placeholder="teammate@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={`${inputClass} flex-1`}
-              />
-              <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!email || createInvite.isPending}
-                onClick={() => createInvite.mutate()}
-              >
-                Invite
-              </Button>
-            </div>
-
-            {inviteLink && (
-              <div className="mt-3 rounded-lg border border-white/10 bg-black/30 p-3">
-                <div className="text-xs text-zinc-500">Share this invite link:</div>
-                <code className="mt-1 block break-all font-mono text-xs text-indigo-300">
-                  {inviteLink}
-                </code>
-              </div>
-            )}
-
-            <div className="mt-4 divide-y divide-white/[0.05]">
-              {(invites.data ?? []).map((inv) => (
-                <div key={inv.token} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-zinc-300">
-                    {inv.email} <span className="text-xs text-zinc-500">· {inv.role}</span>
-                  </span>
-                  <button
-                    onClick={() => revokeInvite.mutate(inv.token)}
-                    className="text-zinc-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

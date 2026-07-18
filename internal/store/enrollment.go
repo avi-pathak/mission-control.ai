@@ -52,6 +52,19 @@ func (t EnrollmentToken) Status(now time.Time) TokenStatus {
 	}
 }
 
+// EnrollTokenOrg returns the org id of a currently-active token. Returns an
+// error if the token is missing, used, expired, or revoked.
+func (s *Store) EnrollTokenOrg(token string) (string, error) {
+	var rec EnrollmentToken
+	if err := s.db.Where("token = ?", token).First(&rec).Error; err != nil {
+		return "", ErrTokenInvalid
+	}
+	if rec.Status(time.Now()) != TokenActive {
+		return "", ErrTokenInvalid
+	}
+	return rec.OrgID, nil
+}
+
 // CreateEnrollToken mints a new enrollment token valid for ttl (org-scoped).
 func (s *Store) CreateEnrollToken(orgID, label string, ttl time.Duration, now time.Time) (EnrollmentToken, error) {
 	tok, err := randToken(32)
@@ -121,6 +134,18 @@ func (s *Store) ConsumeEnrollToken(token, machineID, label string, now time.Time
 func (s *Store) ActiveAgentKeys() ([]AgentKey, error) {
 	var out []AgentKey
 	return out, s.db.Where("revoked = ?", false).Find(&out).Error
+}
+
+// AgentKeyByMachine returns the newest non-revoked key bound to a machine, if
+// any. Used at enroll time to enforce one-machine-per-workspace.
+func (s *Store) AgentKeyByMachine(machineID string) (AgentKey, bool) {
+	var k AgentKey
+	err := s.db.Where("machine_id = ? AND revoked = ?", machineID, false).
+		Order("created_at desc").First(&k).Error
+	if err != nil {
+		return AgentKey{}, false
+	}
+	return k, true
 }
 
 // RevokeAgentKeysForMachine revokes every key bound to a machine.

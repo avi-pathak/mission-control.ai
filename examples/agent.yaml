@@ -22,6 +22,8 @@ hostname: ""
 # Enabled providers.
 providers:
   - "claude-code"
+  - "codex"
+  - "gemini"
 
 discoverEverySeconds: 5
 metricsEverySeconds: 3

@@ -20,21 +20,37 @@ docker compose up -d
 ```
 
 This starts:
-- **server** on `:8080` (REST + WebSocket, SQLite volume `mc-data`)
-- **dashboard** (nginx) on `:3000`, proxying `/api` and `/ws` to the server
+- **postgres** (data store)
+- **server** on `:8080` — a **single service** that hosts the REST API
+  (`/api/v1`), the WebSocket (`/ws`), the agent binary downloads (`/download`),
+  **and the dashboard SPA** itself. No separate web container.
 
-Open **http://localhost:3000**.
+Open **http://localhost:8080** and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+from `docker-compose.yml`.
+
+The compose file uses the published image `avipathak/mission-control-server:latest`.
+To build from source instead, uncomment the `build:` block in `docker-compose.yml`.
 
 ### Configuration
 
-Set these on the server (env or `server.yaml`):
+Set these on the server (env or `server.yaml`). Env wins over YAML. Every value
+has a fallback **except `DATABASE_URL`**, which defaults to SQLite on the
+`/data` volume in the Docker image (so the container still runs with zero config).
 
-| Setting | Env | Purpose |
-|---------|-----|---------|
-| `listenAddr` | `MC_LISTEN_ADDR` | Bind address (default `:8080`). |
-| `publicUrl` | `MC_PUBLIC_URL` | **Externally reachable base URL** (e.g. `https://mc.example.com`). Used to build the enrollment `curl` command. Set this in production. |
-| `apiKeys` | `MC_API_KEY` | Admin/dashboard keys. Leave empty only for local dev. |
-| `dbPath` | `MC_DB_PATH` | SQLite path. |
+| Setting | Env | Fallback | Purpose |
+|---------|-----|----------|---------|
+| `databaseUrl` | `DATABASE_URL` | `/data/mission-control.db` (image) | Postgres DSN, or a SQLite file path. |
+| `jwtSecret` | `JWT_SECRET` | insecure dev secret (warns) | Signs dashboard sessions. **Required in production.** |
+| `adminEmail` / `adminPassword` | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | none (no admin bootstrapped) | Bootstrap platform admin (first run). |
+| `publicUrl` | `MC_PUBLIC_URL` | derived from request | Externally reachable base URL for enrollment commands + invite links. |
+| `listenAddr` | `MC_LISTEN_ADDR` | `:8080` | Bind address. |
+| `logLevel` | `MC_LOG_LEVEL` | `info` | Log verbosity. |
+| `corsOrigins` | `MC_CORS_ORIGINS` | `*` | Comma-separated allowed origins. |
+| `retention.logHours` | `MC_RETENTION_LOG_HOURS` | `72` | Log retention. |
+| `retention.metricHours` | `MC_RETENTION_METRIC_HOURS` | `72` | Metric retention. |
+| `staticDir` | `MC_STATIC_DIR` | `/app/web` (image) | Dashboard SPA dir. |
+| `agentBinDir` | `MC_AGENT_BIN_DIR` | `/app/agents` (image) | Agent binaries served at `/download`. |
+| `smtp.*` | `MC_SMTP_HOST` / `_PORT` / `_USER` / `_PASS` / `_FROM` | disabled | Optional invite emails; if unset, links are shown in the UI. |
 
 ### TLS / production
 
@@ -43,14 +59,12 @@ server, or set `tls.enabled` with `certFile`/`keyFile`. When behind a proxy,
 ensure it forwards `X-Forwarded-Proto` and upgrades WebSocket connections
 (`Upgrade`/`Connection` headers). Set `publicUrl` to the `https://` address.
 
-Example Caddyfile:
+Because the server hosts everything on one port, the proxy just forwards all
+traffic to it:
 
 ```
 mc.example.com {
-    reverse_proxy /api/*  server:8080
-    reverse_proxy /ws     server:8080
-    reverse_proxy /install.sh server:8080
-    reverse_proxy *       dashboard:80
+    reverse_proxy server:8080
 }
 ```
 
@@ -81,8 +95,12 @@ The polished flow — no manual key copying:
 - The agent persists its key to `agent.yaml` and clears the token, so restarts
   reuse the key without re-enrolling.
 - Revoking one machine's key (or an unused token) never affects other machines.
-- `POST /api/enroll` is the only unauthenticated write endpoint; it is
+- `POST /api/v1/enroll` is the only unauthenticated write endpoint; it is
   single-use and token-gated.
+- **One machine = one workspace.** A machine's stable host id binds it to the
+  workspace it first enrolled in. Enrolling the same machine with a token from a
+  *different* workspace is rejected (`409 machine_already_registered`); a
+  platform admin can move it via **Admin → Machines → reassign**.
 
 ### Windows
 
@@ -124,5 +142,39 @@ go build -o mission-control-agent ./apps/agent
 pnpm --filter @mc/dashboard build   # outputs apps/dashboard/dist
 ```
 
-Prebuilt agent binaries for Linux/macOS/Windows are published to GitHub
-Releases on each `v*` tag via GoReleaser.
+Prebuilt agent binaries for Linux/macOS/Windows are served directly by the
+control plane at `/download/mission-control-agent-<os>-<arch>` — the install
+scripts use these, so no GitHub Releases or external hosting is required.
+
+---
+
+## 5. Published Docker images
+
+Images are on Docker Hub:
+
+- **`avipathak/mission-control-server`** — API + WebSocket + dashboard SPA +
+  agent downloads (single container). Multi-arch: `linux/amd64`, `linux/arm64`.
+- **`avipathak/mission-control-agent`** — the host agent (for Linux hosts; on
+  macOS/Windows run the native install script instead, since a container can't
+  see host processes).
+
+Tags: a semver tag (e.g. `0.1.1`) plus `latest`.
+
+### Publishing a new version
+
+CI builds and pushes on any `v*` git tag (`.github/workflows/docker.yml`).
+To publish manually:
+
+```bash
+# 1. Bump the version constant in internal/agent/runtime.go
+# 2. Multi-arch build + push both images
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f deploy/Dockerfile.server \
+  -t avipathak/mission-control-server:<version> \
+  -t avipathak/mission-control-server:latest --push .
+
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f deploy/Dockerfile.agent \
+  -t avipathak/mission-control-agent:<version> \
+  -t avipathak/mission-control-agent:latest --push .
+```

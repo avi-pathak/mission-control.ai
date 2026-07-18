@@ -14,12 +14,15 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Single service: the Go server hosts the REST API, WebSocket, AND the
-  # dashboard SPA on one port.
+  # Single service: the Go server hosts the REST API (/api/v1), WebSocket, AND
+  # the dashboard SPA on one port.
   server:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.server
+    # Use the published image (recommended). To build from source instead,
+    # comment `image:` and uncomment `build:`.
+    image: avipathak/mission-control-server:latest
+    # build:
+    #   context: ..
+    #   dockerfile: deploy/Dockerfile.server
     environment:
       MC_LISTEN_ADDR: ":8080"
       DATABASE_URL: "postgres://mission:mission@postgres:5432/mission_control?sslmode=disable"
@@ -27,6 +30,17 @@ services:
       ADMIN_EMAIL: "admin@example.com"
       ADMIN_PASSWORD: "change-me-please"
       MC_PUBLIC_URL: "http://localhost:8080"
+      MC_LOG_LEVEL: "info"
+      MC_CORS_ORIGINS: "*"
+      MC_RETENTION_LOG_HOURS: "72"
+      MC_RETENTION_METRIC_HOURS: "72"
+      # Optional outbound email for invites. Leave MC_SMTP_HOST empty to disable
+      # (invite links are still returned in the UI).
+      MC_SMTP_HOST: ""
+      MC_SMTP_PORT: "587"
+      MC_SMTP_USER: ""
+      MC_SMTP_PASS: ""
+      MC_SMTP_FROM: ""
     depends_on:
       postgres:
         condition: service_healthy

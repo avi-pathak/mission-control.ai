@@ -8,7 +8,7 @@ interface AuthState {
   org: { id: string; name: string; slug: string } | null;
   ready: boolean; // initial /me check complete
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, orgName?: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<{ status: string }>;
   acceptInvite: (token: string, password: string) => Promise<void>;
   logout: () => void;
   loadMe: () => Promise<void>;
@@ -26,10 +26,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: res.token, user: res.user });
   },
 
-  register: async (email, password, orgName) => {
-    const res = await api.register(email, password, orgName);
-    setToken(res.token);
-    set({ token: res.token, user: res.user });
+  register: async (email, password) => {
+    // Signup is pending admin approval — no token is issued.
+    return api.register(email, password);
   },
 
   acceptInvite: async (token, password) => {

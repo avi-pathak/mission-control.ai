@@ -24,14 +24,23 @@ type Org struct {
 	CreatedAt time.Time
 }
 
-// User is a dashboard user belonging to an org.
+// User account statuses.
+const (
+	UserStatusPending = "pending"
+	UserStatusActive  = "active"
+)
+
+// User is a dashboard user. Pending users have no org and no access until a
+// platform admin approves and assigns them to an org.
 type User struct {
-	ID           string `gorm:"primaryKey"`
-	OrgID        string `gorm:"index"`
-	Email        string `gorm:"uniqueIndex"`
-	PasswordHash string
-	Role         string // owner | admin | member
-	CreatedAt    time.Time
+	ID            string `gorm:"primaryKey"`
+	OrgID         string `gorm:"index"` // empty until approved
+	Email         string `gorm:"uniqueIndex"`
+	PasswordHash  string
+	Role          string // owner | admin | member
+	Status        string // pending | active
+	PlatformAdmin bool   // platform-level superadmin (approves signups)
+	CreatedAt     time.Time
 }
 
 // Invite lets an owner/admin add a user to their org by email.

@@ -33,7 +33,7 @@ func (a Agent) Path() string { return a.path }
 func DefaultAgent() Agent {
 	return Agent{
 		ServerURL:      "ws://localhost:8080",
-		Providers:      []string{"claude-code"},
+		Providers:      []string{"claude-code", "codex", "gemini"},
 		DiscoverEvery:  5,
 		MetricsEvery:   3,
 		HeartbeatEvery: 10,

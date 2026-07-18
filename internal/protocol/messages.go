@@ -248,10 +248,13 @@ type ErrorPayload struct {
 // EnrollRequest is posted by an agent to exchange an enrollment token for a
 // durable agent key.
 type EnrollRequest struct {
-	Token    string `json:"token"`
-	Hostname string `json:"hostname"`
-	OS       string `json:"os"`
-	Arch     string `json:"arch"`
+	Token string `json:"token"`
+	// MachineID is the agent's stable machine fingerprint (host id). Lets the
+	// server enforce one-machine-per-workspace and recognize re-installs.
+	MachineID string `json:"machineId"`
+	Hostname  string `json:"hostname"`
+	OS        string `json:"os"`
+	Arch      string `json:"arch"`
 }
 
 // EnrollResponse is returned on successful enrollment.

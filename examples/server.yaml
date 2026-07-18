@@ -16,6 +16,11 @@ publicUrl: ""
 # or a SQLite file path for local/dev.
 databaseUrl: "mission-control.db"
 
+# Directory of prebuilt agent binaries served at /download for the install
+# scripts (install.sh / install.ps1). Build them with `make agents`.
+# Names must be mission-control-agent-<os>-<arch>[.exe].
+agentBinDir: "bin/agents"
+
 # Signing secret for dashboard JWTs. MUST be set to a strong random value in
 # production (or via JWT_SECRET).
 jwtSecret: ""
@@ -35,5 +40,18 @@ tls:
 retention:
   logHours: 72
   metricHours: 72
+
+# Directory of the built dashboard SPA to serve (single-server hosting).
+# `make serve-prod` sets this via MC_STATIC_DIR; uncomment to hardcode.
+# staticDir: "apps/dashboard/dist"
+
+# Optional outbound email (SMTP). If host is empty, email is disabled and invite
+# links are returned via the API only. Env: MC_SMTP_HOST/_PORT/_USER/_PASS/_FROM.
+smtp:
+  host: ""
+  port: 587
+  username: ""
+  password: ""
+  from: ""
 
 logLevel: "info"
