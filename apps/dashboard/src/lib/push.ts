@@ -46,11 +46,22 @@ export async function enablePush(): Promise<boolean> {
   }
 
   const reg = await navigator.serviceWorker.ready;
+  const appServerKey = urlBase64ToUint8Array(publicKey);
+
+  // A PushSubscription is permanently bound to the VAPID key it was created
+  // with. If an existing subscription used a DIFFERENT key (e.g. the server's
+  // keys changed), the push service silently drops our messages. So if the
+  // existing subscription's key doesn't match the current server key, drop it
+  // and re-subscribe.
   let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub.options.applicationServerKey, appServerKey)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = null;
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+      applicationServerKey: appServerKey as BufferSource,
     });
   }
 
@@ -59,6 +70,15 @@ export async function enablePush(): Promise<boolean> {
     endpoint: json.endpoint ?? '',
     keys: { p256dh: json.keys?.p256dh ?? '', auth: json.keys?.auth ?? '' },
   });
+  return true;
+}
+
+/** Compare an existing subscription's applicationServerKey to the desired one. */
+function sameKey(existing: ArrayBuffer | null | undefined, desired: Uint8Array): boolean {
+  if (!existing) return false;
+  const a = new Uint8Array(existing);
+  if (a.length !== desired.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== desired[i]) return false;
   return true;
 }
 

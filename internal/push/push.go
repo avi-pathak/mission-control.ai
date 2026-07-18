@@ -76,6 +76,12 @@ func (s *Sender) Send(sub Subscription, p Payload) error {
 		VAPIDPublicKey:  s.cfg.VAPIDPublic,
 		VAPIDPrivateKey: s.cfg.VAPIDPrivate,
 		TTL:             60,
+		// High urgency so the push service wakes the browser and delivers
+		// immediately (a blocked session needs prompt attention).
+		Urgency: webpush.UrgencyHigh,
+		// Cap the record size. The library otherwise pads every payload to 4096
+		// bytes; a tight bound avoids unnecessary over-padding.
+		RecordSize: 2048,
 	})
 	if err != nil {
 		return err
