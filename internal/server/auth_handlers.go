@@ -26,11 +26,8 @@ func (s *Server) bootstrapAdmin() {
 		}
 		return
 	}
-	n, err := s.store.CountUsers()
-	if err != nil || n > 0 {
-		// Users exist but none match ADMIN_EMAIL: still create the platform admin
-		// below so approvals are possible.
-	}
+	// The ADMIN_EMAIL user doesn't exist yet: create the platform admin below
+	// (and a default org to hold it) so approvals are possible from first boot.
 	now := time.Now()
 	// Reuse an existing "default" org if present (idempotent across restarts).
 	org, err := s.store.OrgBySlug("default")

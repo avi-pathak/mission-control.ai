@@ -39,6 +39,10 @@ func httpBaseFromServerURL(serverURL string) (string, error) {
 	return strings.TrimRight(u.String(), "/"), nil
 }
 
+// ErrAlreadyRegistered is returned when the machine is already registered to a
+// different workspace. The daemon should exit rather than retry.
+var ErrAlreadyRegistered = fmt.Errorf("machine already registered to another workspace")
+
 // Bootstrap ensures the agent has a durable API key. If an enrollToken is
 // present it performs the enrollment exchange, persists the returned
 // credentials back to the config file, and updates cfg in place — this takes
@@ -46,10 +50,6 @@ func httpBaseFromServerURL(serverURL string) (string, error) {
 // fresh token deliberately re-enrolls (e.g. to move the machine to a different
 // workspace/org). It is a no-op only when there is no token AND no existing
 // apiKey to fall back on.
-// ErrAlreadyRegistered is returned when the machine is already registered to a
-// different workspace. The daemon should exit rather than retry.
-var ErrAlreadyRegistered = fmt.Errorf("machine already registered to another workspace")
-
 func Bootstrap(cfg *config.Agent, hostname string, log *zap.Logger) error {
 	if cfg.EnrollToken == "" {
 		// No token: rely on an existing apiKey (or fail later if none).

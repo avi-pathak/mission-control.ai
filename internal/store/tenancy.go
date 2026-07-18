@@ -373,5 +373,5 @@ func (s *Store) GetFile(orgID, id string) (PublishedFile, error) {
 	return f, nil
 }
 
-// FileMeta is derived from PublishedFile for GORM's model resolution.
+// TableName pins PublishedFile to the published_files table for GORM.
 func (PublishedFile) TableName() string { return "published_files" }

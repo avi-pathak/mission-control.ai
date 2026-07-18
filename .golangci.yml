@@ -1,20 +1,32 @@
+version: "2"
+
 run:
   timeout: 5m
-  tests: true
 
 linters:
+  # Standard set = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
     - misspell
     - revive
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+  settings:
+    staticcheck:
+      # Drop the opinionated "quickfix" style checks (e.g. QF1002 tagged switch);
+      # keep the SA* correctness checks.
+      checks:
+        - all
+        - -QF1002
+    revive:
+      rules:
+        # Doc-comment presence/format on exported symbols is style, not a bug.
+        - name: exported
+          disabled: true
+  exclusions:
+    rules:
+      # Ignoring the error from a deferred Close() is idiomatic.
+      - source: 'defer .*\.Close\(\)'
+        linters:
+          - errcheck
+      - path: _test\.go
+        linters:
+          - errcheck
