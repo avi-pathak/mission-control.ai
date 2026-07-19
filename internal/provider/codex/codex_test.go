@@ -62,23 +62,6 @@ func TestTokenUsageFromRollout(t *testing.T) {
 		t.Fatalf("bad usage: %+v", u)
 	}
 }
-
-func TestClassifyRolloutTail(t *testing.T) {
-	call := `{"type":"response_item","payload":{"type":"function_call","name":"x"}}`
-	out := `{"type":"response_item","payload":{"type":"function_call_output"}}`
-	msg := `{"type":"response_item","payload":{"type":"message"}}`
-
-	if got := classifyRolloutTail([]string{msg, call}); got != protocol.StatusWaitingApproval {
-		t.Fatalf("dangling call should be waiting, got %s", got)
-	}
-	if got := classifyRolloutTail([]string{call, out}); got != protocol.StatusRunning {
-		t.Fatalf("completed call should be running, got %s", got)
-	}
-	if got := classifyRolloutTail([]string{call, msg}); got != protocol.StatusRunning {
-		t.Fatalf("trailing message should be running, got %s", got)
-	}
-}
-
 func TestClassifyPaneText(t *testing.T) {
 	if classifyPaneText("Allow command? (y/n)") != protocol.StatusWaitingApproval {
 		t.Fatal("approval prompt not detected")

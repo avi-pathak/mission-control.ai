@@ -2,7 +2,6 @@ package codex
 
 import (
 	"context"
-	"encoding/json"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -41,48 +40,16 @@ func classifyPaneText(pane string) protocol.SessionStatus {
 	return protocol.StatusRunning
 }
 
-type rolloutItem struct {
-	Type    string `json:"type"`
-	Payload struct {
-		Type string `json:"type"`
-	} `json:"payload"`
-}
-
-// classifyRolloutTail infers status from the tail of a rollout. A dangling
-// function_call / custom_tool_call with no following *_output means the turn is
-// paused awaiting the tool result or the user's approval. A trailing
-// task_complete is treated as running (Codex may still be alive at the prompt).
-// Pure and unit-testable.
-func classifyRolloutTail(lines []string) protocol.SessionStatus {
-	// Find the last response_item that is a call or an output.
-	for i := len(lines) - 1; i >= 0; i-- {
-		var it rolloutItem
-		if err := json.Unmarshal([]byte(lines[i]), &it); err != nil {
-			continue
-		}
-		if it.Type != "response_item" {
-			continue
-		}
-		switch it.Payload.Type {
-		case "function_call", "custom_tool_call":
-			return protocol.StatusWaitingApproval // dangling call → awaiting result/approval
-		case "function_call_output", "custom_tool_call_output", "message", "reasoning":
-			return protocol.StatusRunning
-		}
-	}
-	return protocol.StatusRunning
-}
-
-// detectStatus determines a Codex session's status: tmux pane scan when
-// available (authoritative), else rollout-tail heuristic.
+// detectStatus determines a Codex session's status. Blocked ("waiting_approval")
+// detection requires the live tmux pane (the actual approval prompt); a dangling
+// function_call in the rollout is indistinguishable from normal mid-execution,
+// so non-tmux sessions default to running to avoid false "blocked" alerts.
 func (p *Provider) detectStatus(ctx context.Context, s protocol.Session, rolloutPath string) protocol.SessionStatus {
+	_ = rolloutPath // no longer used for status; kept for signature stability
 	if s.TmuxSession != "" {
 		if out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", s.TmuxSession, "-p").Output(); err == nil {
 			return classifyPaneText(string(out))
 		}
-	}
-	if rolloutPath != "" {
-		return classifyRolloutTail(tailLines(rolloutPath, 40))
 	}
 	return protocol.StatusRunning
 }

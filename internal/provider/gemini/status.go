@@ -2,7 +2,6 @@ package gemini
 
 import (
 	"context"
-	"encoding/json"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -41,37 +40,16 @@ func classifyPaneText(pane string) protocol.SessionStatus {
 	return protocol.StatusRunning
 }
 
-type sessionItem struct {
-	Type string `json:"type"`
-}
-
-// classifySessionTail infers status from the tail of a session file. A trailing
-// user message with no following gemini reply means Gemini is still working on
-// the turn (running). Pure and unit-testable.
-func classifySessionTail(lines []string) protocol.SessionStatus {
-	for i := len(lines) - 1; i >= 0; i-- {
-		var it sessionItem
-		if err := json.Unmarshal([]byte(lines[i]), &it); err != nil {
-			continue
-		}
-		switch it.Type {
-		case "user", "gemini":
-			return protocol.StatusRunning
-		}
-	}
-	return protocol.StatusRunning
-}
-
-// detectStatus determines a Gemini session's status: tmux pane scan when
-// available (authoritative), else session-tail heuristic.
+// detectStatus determines a Gemini session's status. Blocked detection requires
+// the live tmux pane (the actual prompt); the session-file tail can't reliably
+// distinguish "waiting" from normal mid-execution, so non-tmux sessions default
+// to running to avoid false "blocked" alerts.
 func (p *Provider) detectStatus(ctx context.Context, s protocol.Session, sessionPath string) protocol.SessionStatus {
+	_ = sessionPath // no longer used for status; kept for signature stability
 	if s.TmuxSession != "" {
 		if out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", s.TmuxSession, "-p").Output(); err == nil {
 			return classifyPaneText(string(out))
 		}
-	}
-	if sessionPath != "" {
-		return classifySessionTail(tailLines(sessionPath, 40))
 	}
 	return protocol.StatusRunning
 }

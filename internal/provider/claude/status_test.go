@@ -58,29 +58,3 @@ func TestClassifyPaneText(t *testing.T) {
 		})
 	}
 }
-
-func TestClassifyTranscriptTail(t *testing.T) {
-	toolUse := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{}}]}}`
-	assistantText := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}`
-	userMsg := `{"type":"user","message":{"role":"user","content":"hi"}}`
-	noise := `{"type":"mode","mode":"x"}`
-
-	cases := []struct {
-		name  string
-		lines []string
-		want  protocol.SessionStatus
-	}{
-		{"dangling tool_use → waiting", []string{userMsg, toolUse}, protocol.StatusWaitingApproval},
-		{"tool_use then user result → running", []string{toolUse, userMsg}, protocol.StatusRunning},
-		{"assistant text → running", []string{userMsg, assistantText}, protocol.StatusRunning},
-		{"noise after tool_use ignored", []string{userMsg, toolUse, noise}, protocol.StatusWaitingApproval},
-		{"empty → running", []string{}, protocol.StatusRunning},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := classifyTranscriptTail(c.lines); got != c.want {
-				t.Fatalf("classifyTranscriptTail = %s, want %s", got, c.want)
-			}
-		})
-	}
-}

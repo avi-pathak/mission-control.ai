@@ -2,8 +2,6 @@ package claude
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -50,78 +48,18 @@ func classifyPaneText(pane string) protocol.SessionStatus {
 	return protocol.StatusRunning
 }
 
-// transcriptTailStatus is the shape needed to classify a transcript's last turn.
-type ttMsg struct {
-	Type    string `json:"type"`
-	Message struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
-	} `json:"message"`
-}
-
-// classifyTranscriptTail decides status from the last meaningful transcript
-// message. A dangling assistant tool_use (no following user/tool_result) means
-// the turn is paused — likely awaiting permission. Pure and unit-testable.
-func classifyTranscriptTail(lines []string) protocol.SessionStatus {
-	// Walk backwards to the last user/assistant message.
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			continue
-		}
-		var m ttMsg
-		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			continue
-		}
-		if m.Type == "user" {
-			// A user/tool_result followed the assistant → not blocked.
-			return protocol.StatusRunning
-		}
-		if m.Type == "assistant" {
-			// If the assistant's last message contains a tool_use, the turn is
-			// awaiting the tool result / permission.
-			var blocks []struct {
-				Type string `json:"type"`
-			}
-			if err := json.Unmarshal(m.Message.Content, &blocks); err == nil {
-				for _, b := range blocks {
-					if b.Type == "tool_use" {
-						return protocol.StatusWaitingApproval
-					}
-				}
-			}
-			return protocol.StatusRunning
-		}
-	}
-	return protocol.StatusRunning
-}
-
-// detectStatus determines a session's real status. For tmux-backed sessions it
-// scans the live pane (authoritative). Otherwise it falls back to the transcript
-// tail — but ONLY when this session is the sole one in its cwd, because Claude's
-// transcripts are keyed by directory (not PID), so with multiple sessions in one
-// cwd the transcript can't be attributed to a specific session and would produce
-// wrong-session "blocked" results. When ambiguous, defaults to running.
+// detectStatus determines a session's real status. Blocked ("waiting_approval")
+// detection requires reading the live tmux pane, which shows the actual approval
+// prompt. Sessions not running under tmux can't be reliably classified as
+// blocked (a transcript's dangling tool_use is indistinguishable from normal
+// mid-execution), so they default to running. This avoids false "blocked"
+// notifications for the common non-tmux case.
 func (p *Provider) detectStatus(ctx context.Context, s protocol.Session, sharedCWD bool) protocol.SessionStatus {
+	_ = sharedCWD // retained for signature stability; no longer needed
 	if s.TmuxSession != "" {
 		out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", s.TmuxSession, "-p").Output()
 		if err == nil {
 			return classifyPaneText(string(out))
-		}
-	}
-	if sharedCWD {
-		// Ambiguous: multiple sessions share this cwd and this one has no tmux
-		// pane to read. Don't guess from a transcript we can't attribute.
-		return protocol.StatusRunning
-	}
-	if path, ok := transcriptFile(s.CWD); ok {
-		if data, err := os.ReadFile(path); err == nil {
-			// Only need the tail; split and pass the last N lines.
-			lines := strings.Split(string(data), "\n")
-			if len(lines) > 40 {
-				lines = lines[len(lines)-40:]
-			}
-			return classifyTranscriptTail(lines)
 		}
 	}
 	return protocol.StatusRunning
