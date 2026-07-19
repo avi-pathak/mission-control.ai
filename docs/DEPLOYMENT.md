@@ -54,21 +54,81 @@ has a fallback **except `DATABASE_URL`**, which defaults to SQLite on the
 | `webPush.*` | `MC_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` / `MC_VAPID_SUBJECT` | disabled | Web Push (VAPID) keys for blocked-session notifications. Generate with `make vapid`. |
 | `blockedNotifySeconds` | `MC_BLOCKED_NOTIFY_SECONDS` | `30` | Notify when a session waits for approval this long (0 = off). |
 
-### TLS / production
+### TLS / reverse proxy (production)
 
-Terminate TLS at a reverse proxy (Caddy, nginx, Traefik) in front of the
-server, or set `tls.enabled` with `certFile`/`keyFile`. When behind a proxy,
-ensure it forwards `X-Forwarded-Proto` and upgrades WebSocket connections
-(`Upgrade`/`Connection` headers). Set `publicUrl` to the `https://` address.
+Terminate TLS at a reverse proxy (Caddy, nginx, Traefik) in front of the server,
+or set `tls.enabled` with `certFile`/`keyFile`. Set `publicUrl` to the `https://`
+address.
 
-Because the server hosts everything on one port, the proxy just forwards all
-traffic to it:
+> **⚠️ Your proxy MUST forward WebSocket upgrades.** The dashboard's live updates,
+> agent connections, and terminal streaming all use a WebSocket at `/ws`. If your
+> proxy doesn't pass the `Upgrade`/`Connection` headers, the REST API works but
+> **agents fail to connect with `websocket: bad handshake`** and the dashboard
+> shows "connecting"/offline. This is the #1 self-hosting mistake — see the
+> per-proxy configs below.
+
+Because the server hosts everything on one port, the proxy forwards *all* traffic
+to it (say the container is published on host port `8080`):
+
+**Caddy** — handles WebSockets automatically, nothing extra needed:
 
 ```
 mc.example.com {
-    reverse_proxy server:8080
+    reverse_proxy localhost:8080
 }
 ```
+
+**nginx** — you MUST add the three WebSocket lines (nginx defaults to HTTP/1.0
+for proxying, which cannot upgrade):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name mc.example.com;
+
+    ssl_certificate     /path/fullchain.pem;
+    ssl_certificate_key /path/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;                     # required for WebSocket
+        proxy_set_header Upgrade $http_upgrade;     # required for WebSocket
+        proxy_set_header Connection "upgrade";      # required for WebSocket
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;                   # keep long-lived WS/terminals open
+        proxy_send_timeout 3600s;
+    }
+}
+# Redirect http → https on a second `server { listen 80; ... }` block.
+```
+
+Apply with `sudo nginx -t && sudo systemctl reload nginx`.
+
+**Traefik** — WebSockets work out of the box; just route the host to the service
+(no special middleware needed).
+
+**Cloudflare** in front of any of the above: WebSockets are enabled by default,
+but make sure no "cache everything" / buffering rule sits on `/ws`.
+
+#### Verify the WebSocket upgrade works
+
+After configuring the proxy, this should return **`101 Switching Protocols`**
+(not `400`/`426`):
+
+```bash
+curl -s -i --max-time 6 \
+  -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  "https://mc.example.com/ws?role=agent" | head -3
+```
+
+If you get `400 Bad Request` with `Connection: keep-alive`, the upgrade headers
+aren't being forwarded — recheck the three `proxy_*` lines above. Agents retry
+with backoff, so they reconnect automatically once the proxy is fixed (no
+reinstall needed).
 
 ---
 
@@ -126,6 +186,16 @@ For auto-start on boot, wrap the agent in your init system:
   then `systemctl enable --now mission-control-agent`.
 - **launchd** (macOS): a `LaunchAgent` plist invoking the same command.
 - **Windows**: register with `nssm` or a scheduled task at logon.
+
+### Troubleshooting enrollment
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Agent logs `enrollment complete` then `websocket: bad handshake` (retrying) | Your reverse proxy isn't forwarding WebSocket upgrades | Add the WebSocket headers to your proxy — see **TLS / reverse proxy** above. Agents auto-reconnect once fixed. |
+| `enroll failed (401): invalid_token` | Token expired, already used, or revoked | Generate a fresh token in **Machines → Add Machine** and re-run. |
+| `invalid character '<'` during enroll | Agent hit an HTML page instead of the API (wrong URL, or served an old page) | Confirm `MC_SERVER_URL` points at the server and `/api/v1/enroll` returns JSON. |
+| `409 machine_already_registered` | The machine is already registered to a **different** workspace on this server | Ask an admin to reassign it (**Admin → Machines**), or enroll with a token from the owning workspace. |
+| Dashboard shows "connecting" / offline in the browser | Same WebSocket issue as above, or a stale token | Fix the proxy `/ws` path; hard-refresh and re-login. |
 
 ---
 
