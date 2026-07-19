@@ -62,7 +62,7 @@ func Bootstrap(cfg *config.Agent, hostname string, log *zap.Logger) error {
 	// workspace and recognize re-installs.
 	machineID := cfg.AgentID
 	if machineID == "" {
-		machineID = DeriveAgentID()
+		machineID = DeriveAgentIDForServer(cfg.ServerURL)
 	}
 	log.Info("enrolling with server", zap.String("server", cfg.ServerURL))
 	res, err := enroll(cfg.ServerURL, cfg.EnrollToken, machineID, hostname, cfg.InsecureTLS)

@@ -2,9 +2,13 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"net/url"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +43,7 @@ type Runtime struct {
 // New constructs the agent runtime.
 func New(cfg config.Agent, log *zap.Logger, providers []provider.AgentProvider) *Runtime {
 	if cfg.AgentID == "" {
-		cfg.AgentID = DeriveAgentID()
+		cfg.AgentID = DeriveAgentIDForServer(cfg.ServerURL)
 	}
 	hostname := cfg.HostnameOverride
 	if hostname == "" {
@@ -387,8 +391,43 @@ func (r *Runtime) handleTerminalAttach(env *protocol.Envelope) {
 // falling back to a random uuid if unavailable. Used both at runtime and at
 // enroll time so the server can recognize the same physical machine.
 func DeriveAgentID() string {
+	return DeriveAgentIDForServer("")
+}
+
+// DeriveAgentIDForServer returns a stable machine fingerprint scoped to a
+// server: base host id plus a short hash of the server's host. This lets ONE
+// physical machine enroll into multiple servers (e.g. dev + prod) with a
+// distinct identity per server, so each server's one-machine-one-workspace rule
+// holds independently. An empty serverURL yields the bare host id.
+func DeriveAgentIDForServer(serverURL string) string {
+	base := "mc-" + uuid.NewString()
 	if info, err := host.Info(); err == nil && info.HostID != "" {
-		return "mc-" + info.HostID
+		base = "mc-" + info.HostID
 	}
-	return "mc-" + uuid.NewString()
+	h := serverHost(serverURL)
+	if h == "" {
+		return base
+	}
+	sum := sha256.Sum256([]byte(h))
+	return base + "-" + hex.EncodeToString(sum[:])[:8]
+}
+
+// serverHost extracts a normalized host[:port] from a ws(s)/http(s) URL. Returns
+// "" if it can't be parsed or is empty.
+func serverHost(serverURL string) string {
+	s := strings.TrimSpace(serverURL)
+	if s == "" {
+		return ""
+	}
+	if u, err := url.Parse(s); err == nil && u.Host != "" {
+		return strings.ToLower(u.Host)
+	}
+	// Fall back: strip scheme manually.
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.IndexAny(s, "/?"); i >= 0 {
+		s = s[:i]
+	}
+	return strings.ToLower(s)
 }

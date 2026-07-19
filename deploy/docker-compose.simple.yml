@@ -1,0 +1,30 @@
+services:
+  server:
+    image: avipathak/mission-control-server:latest
+    pull_policy: always
+    ports:
+      # host:container — the app listens on 8080 INSIDE the container. Expose it
+      # on whatever host port your reverse proxy targets. Here: host 6003.
+      - "6003:8080"
+    volumes:
+      - mc-data:/volumes/persnal/mission-control/data
+    environment:
+      # SQLite on the mounted volume (persists across restarts).
+      DATABASE_URL: "/volumes/persnal/mission-control/data/mission-control.db"
+      # CHANGE THESE for anything beyond local testing.
+      JWT_SECRET: "change-me-to-a-long-random-value"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "change-me-please"
+      # Public URL your reverse proxy serves (used for enrollment commands +
+      # invite / notification links). Must be the external address, not localhost.
+      MC_PUBLIC_URL: "public url"
+      # Blocked-session notifications (optional): generate keys with `make vapid`
+      # and paste them here to enable Web Push.
+      # MC_VAPID_PUBLIC_KEY: ""
+      # MC_VAPID_PRIVATE_KEY: ""
+      # MC_VAPID_SUBJECT: "mailto:admin@example.com"
+      # MC_BLOCKED_NOTIFY_SECONDS: "30"
+    restart: unless-stopped
+
+volumes:
+  mc-data:

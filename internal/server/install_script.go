@@ -36,23 +36,31 @@ case "$arch" in
   *) echo "unsupported arch: $arch" >&2; exit 1 ;;
 esac
 
-# Guard: refuse to install/start a second agent on this machine. Running two
-# agents (especially sharing one identity) makes them fight over the same
-# server slot and the dashboard flaps. Set MC_FORCE=1 to override.
+# Per-server config file, so one machine can run agents for multiple servers
+# (e.g. dev + prod) side by side. Derive a safe filename from the server host.
+server_host="$(printf '%s' "$BASE" | sed -e 's#^[a-zA-Z]*://##' -e 's#[/?].*$##' | tr '[:upper:]' '[:lower:]')"
+[ -z "$server_host" ] && server_host="default"
+cfg_slug="$(printf '%s' "$server_host" | tr -c 'a-z0-9' '-' | sed 's/-\{1,\}/-/g;s/^-//;s/-$//')"
+CFG="${CONFIG_DIR}/agent-${cfg_slug}.yaml"
+
+# Guard: refuse to start a SECOND agent for THIS server on this machine (two
+# agents sharing one identity fight over the same slot and the dashboard flaps).
+# A different server on the same machine is allowed. Set MC_FORCE=1 to override.
 if [ -z "${MC_FORCE:-}" ]; then
   running=""
   if command -v pgrep >/dev/null 2>&1; then
-    running="$(pgrep -f "${BIN} --config" 2>/dev/null || true)"
+    running="$(pgrep -f "${BIN} --config ${CFG}" 2>/dev/null || true)"
   else
-    running="$(ps ax 2>/dev/null | grep "${BIN} --config" | grep -v grep || true)"
+    running="$(ps ax 2>/dev/null | grep "${BIN} --config ${CFG}" | grep -v grep || true)"
   fi
   if [ -n "$running" ]; then
-    echo "error: a mission-control agent is already running on this machine:" >&2
+    echo "error: an agent for ${server_host} is already running on this machine:" >&2
     echo "$running" | sed 's/^/  /' >&2
     echo "" >&2
-    echo "Only one agent per machine is supported. To reinstall/restart, first stop it:" >&2
-    echo "  pkill -f '${BIN} --config'" >&2
-    echo "then re-run this installer. Or set MC_FORCE=1 to override (not recommended)." >&2
+    echo "Only one agent per server is supported. To reinstall/restart it, first stop it:" >&2
+    echo "  pkill -f '${BIN} --config ${CFG}'" >&2
+    echo "then re-run this installer. Or set MC_FORCE=1 to override." >&2
+    echo "(A different server on this machine is fine — this only guards ${server_host}.)" >&2
     exit 1
   fi
 fi
@@ -84,7 +92,6 @@ chmod +x "$tmp"
 if [ -w "$INSTALL_DIR" ]; then mv "$tmp" "${INSTALL_DIR}/${BIN}"; else sudo mv "$tmp" "${INSTALL_DIR}/${BIN}"; fi
 
 mkdir -p "$CONFIG_DIR"
-CFG="${CONFIG_DIR}/agent.yaml"
 if [ ! -f "$CFG" ]; then
   cat > "$CFG" <<EOF
 serverUrl: "${MC_SERVER_URL:-__BASE__}"
@@ -124,15 +131,25 @@ $Bin = 'mission-control-agent.exe'
 $InstallDir = Join-Path $env:LOCALAPPDATA 'MissionControl'
 $ConfigDir = Join-Path $env:USERPROFILE '.mission-control'
 
-# Guard: refuse to install/start a second agent on this machine. Set MC_FORCE=1
-# to override.
+# Per-server config file so one machine can run agents for multiple servers
+# (e.g. dev + prod). Derive a safe filename from the server host.
+$serverHost = ($Base -replace '^[a-zA-Z]*://','' -replace '[/?].*$','').ToLower()
+if (-not $serverHost) { $serverHost = 'default' }
+$cfgSlug = ($serverHost -replace '[^a-z0-9]','-') -replace '-+','-'
+$cfgSlug = $cfgSlug.Trim('-')
+$cfg = Join-Path $ConfigDir "agent-$cfgSlug.yaml"
+
+# Guard: refuse to start a SECOND agent for THIS server on this machine. A
+# different server on the same machine is allowed. Set MC_FORCE=1 to override.
 if (-not $env:MC_FORCE) {
-  $existing = Get-Process -Name 'mission-control-agent' -ErrorAction SilentlyContinue
+  $existing = Get-CimInstance Win32_Process -Filter "Name='mission-control-agent.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*--config*$cfgSlug*" }
   if ($existing) {
-    Write-Error "a mission-control agent is already running on this machine (PID $($existing.Id -join ', '))."
-    Write-Host "Only one agent per machine is supported. To reinstall/restart, first stop it:"
-    Write-Host "  Stop-Process -Name mission-control-agent"
-    Write-Host "then re-run this installer. Or set MC_FORCE=1 to override (not recommended)."
+    Write-Error "an agent for $serverHost is already running on this machine (PID $($existing.ProcessId -join ', '))."
+    Write-Host "Only one agent per server is supported. Stop it first:"
+    Write-Host "  Get-CimInstance Win32_Process -Filter \"Name='mission-control-agent.exe'\" | Where-Object { \$_.CommandLine -like '*$cfgSlug*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId }"
+    Write-Host "then re-run this installer. Or set MC_FORCE=1 to override."
+    Write-Host "(A different server on this machine is fine — this only guards $serverHost.)"
     exit 1
   }
 }
@@ -159,7 +176,6 @@ try {
 }
 
 New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
-$cfg = Join-Path $ConfigDir 'agent.yaml'
 if (-not (Test-Path $cfg)) {
   $token = if ($env:MC_ENROLL_TOKEN) { $env:MC_ENROLL_TOKEN } else { '' }
   $srv = if ($env:MC_SERVER_URL) { $env:MC_SERVER_URL } else { '__BASE__' }

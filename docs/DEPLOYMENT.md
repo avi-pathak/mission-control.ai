@@ -103,6 +103,12 @@ The polished flow — no manual key copying:
   workspace it first enrolled in. Enrolling the same machine with a token from a
   *different* workspace is rejected (`409 machine_already_registered`); a
   platform admin can move it via **Admin → Machines → reassign**.
+- **Multiple servers, same machine.** A machine can run agents for several
+  servers at once (e.g. a dev and a prod control plane). The installer writes a
+  **per-server** config (`~/.mission-control/agent-<serverhost>.yaml`) and the
+  agent derives a **per-server identity**, so each server sees the machine
+  independently. The install guard only blocks a duplicate agent for the *same*
+  server, not a different one.
 
 ### Windows
 
