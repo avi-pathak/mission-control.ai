@@ -118,6 +118,7 @@ func (p *Provider) Discover(ctx context.Context) ([]protocol.Session, error) {
 		return nil, err
 	}
 	var sessions []protocol.Session
+	cwdCount := map[string]int{} // how many live sessions share each cwd
 	for _, pr := range procs {
 		name, _ := pr.NameWithContext(ctx)
 		cmdline, _ := pr.CmdlineWithContext(ctx)
@@ -146,8 +147,17 @@ func (p *Provider) Discover(ctx context.Context) ([]protocol.Session, error) {
 		}
 		sess.TmuxSession = tmux.SessionForPID(ctx, int(pr.Pid))
 		sess.Tokens = tokenUsageForCWD(cwd)
-		sess.Status = p.detectStatus(ctx, sess)
+		if cwd != "" {
+			cwdCount[cwd]++
+		}
 		sessions = append(sessions, sess)
+	}
+	// Second pass: classify status now that we know which cwds are shared. A
+	// shared cwd with no tmux pane can't be attributed to a specific session, so
+	// detectStatus avoids the ambiguous transcript heuristic there.
+	for i := range sessions {
+		sharedCWD := sessions[i].CWD != "" && cwdCount[sessions[i].CWD] > 1
+		sessions[i].Status = p.detectStatus(ctx, sessions[i], sharedCWD)
 	}
 	return sessions, nil
 }

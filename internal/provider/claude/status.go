@@ -12,7 +12,8 @@ import (
 )
 
 // Approval-prompt patterns Claude Code shows when it needs the user to confirm
-// an action. Matched case-insensitively against the visible tmux pane.
+// an action or make a selection. Matched case-insensitively against the visible
+// tmux pane.
 var approvalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)do you want to proceed`),
 	regexp.MustCompile(`(?i)do you want to (create|make|allow|run|edit|delete)`),
@@ -22,6 +23,11 @@ var approvalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\(y/n\)`),
 	regexp.MustCompile(`(?i)press\s+enter\s+to\s+continue`),
 	regexp.MustCompile(`(?i)allow this (tool|command|action)`),
+	// Interactive selection menus: a "❯" cursor on a numbered option, or the
+	// standard footer Claude shows for a menu awaiting the user's choice.
+	regexp.MustCompile(`(?im)^\s*❯\s*\d+\.`),
+	regexp.MustCompile(`(?i)enter to (select|confirm|continue)`),
+	regexp.MustCompile(`(?i)esc to (cancel|interrupt|exit)`),
 }
 
 // classifyPaneText decides whether visible terminal text indicates the session
@@ -91,14 +97,22 @@ func classifyTranscriptTail(lines []string) protocol.SessionStatus {
 }
 
 // detectStatus determines a session's real status. For tmux-backed sessions it
-// scans the live pane (authoritative); otherwise it inspects the transcript
-// tail (heuristic). Defaults to running.
-func (p *Provider) detectStatus(ctx context.Context, s protocol.Session) protocol.SessionStatus {
+// scans the live pane (authoritative). Otherwise it falls back to the transcript
+// tail — but ONLY when this session is the sole one in its cwd, because Claude's
+// transcripts are keyed by directory (not PID), so with multiple sessions in one
+// cwd the transcript can't be attributed to a specific session and would produce
+// wrong-session "blocked" results. When ambiguous, defaults to running.
+func (p *Provider) detectStatus(ctx context.Context, s protocol.Session, sharedCWD bool) protocol.SessionStatus {
 	if s.TmuxSession != "" {
 		out, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", s.TmuxSession, "-p").Output()
 		if err == nil {
 			return classifyPaneText(string(out))
 		}
+	}
+	if sharedCWD {
+		// Ambiguous: multiple sessions share this cwd and this one has no tmux
+		// pane to read. Don't guess from a transcript we can't attribute.
+		return protocol.StatusRunning
 	}
 	if path, ok := transcriptFile(s.CWD); ok {
 		if data, err := os.ReadFile(path); err == nil {

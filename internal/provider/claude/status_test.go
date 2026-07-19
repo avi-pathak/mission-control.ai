@@ -33,6 +33,13 @@ func TestClassifyPaneText(t *testing.T) {
 			protocol.StatusWaitingApproval,
 		},
 		{
+			// Real interactive selection menu (numbered options with a ❯ cursor
+			// and the standard footer) — a session waiting for the user's choice.
+			"selection menu",
+			"  ❯ 1. Application Programming Interface\n  2. Applied Program Integration\n  3. Automated Process\nEnter to select · ↑/↓ to navigate · Esc to cancel",
+			protocol.StatusWaitingApproval,
+		},
+		{
 			"idle input prompt",
 			"╭─── Claude Code ───╮\n│ ready │\n❯ type your message",
 			protocol.StatusRunning,
