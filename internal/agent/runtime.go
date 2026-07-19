@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the agent build version.
-const Version = "0.1.1"
+const Version = "0.1.2"
 
 // Runtime is the agent daemon.
 type Runtime struct {
