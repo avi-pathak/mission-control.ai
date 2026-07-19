@@ -92,8 +92,15 @@ func isClaudeProcess(name string, cmdline string) bool {
 		strings.HasPrefix(l, "rg ") || strings.HasPrefix(l, "fd ") {
 		return false
 	}
-	// The process's own executable name is exactly "claude" (standalone CLI).
-	if name == "claude" {
+	// The process's own executable name is claude (standalone CLI). gopsutil may
+	// report it as "claude" or "claude.exe" depending on how it reads the name,
+	// so match the base name rather than requiring an exact string.
+	n := strings.ToLower(name)
+	if n == "claude" || n == "claude.exe" {
+		return true
+	}
+	// Bare "claude" command line (e.g. launched via tmux/shell as just `claude`).
+	if l == "claude" {
 		return true
 	}
 	// node-based / bundled CLI: a path ending in "/claude", "claude-code", or the

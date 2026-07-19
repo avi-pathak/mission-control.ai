@@ -11,6 +11,8 @@ func TestIsClaudeProcess(t *testing.T) {
 	}{
 		// --- real CLI sessions (should match) ---
 		{"claude", "claude", true, "standalone CLI"},
+		{"claude.exe", "claude", true, "gopsutil reports name as claude.exe (tmux/shell launched)"},
+		{"Claude", "claude", true, "capitalized name from gopsutil"},
 		{
 			"claude",
 			"/Users/x/.vscode/extensions/anthropic.claude-code-2.1.211-darwin-arm64/resources/native-binary/claude --output-format stream-json --verbose",
